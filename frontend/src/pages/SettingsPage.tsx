@@ -5,6 +5,7 @@ import { num as N } from '../domain/engine';
 import { Store } from '../domain/store';
 import { gate } from '../domain/enterprise';
 import { applyTheme } from '../domain/startup';
+import { DEFAULT_SCHEME, SCHEMES, activeScheme, colorChoice, readable, setColors, type ColorChoice } from '../domain/colors';
 import { loadSample } from '../domain/sample';
 import { restoreToServer, type BackupData } from '../domain/serverBackup';
 import { go } from '../domain/nav';
@@ -41,6 +42,44 @@ function initialVals(): Record<string, string> {
     CURRENCIES.forEach(c => { v['fx-' + c] = String(S.fx[c] ?? ''); });
     Object.entries(S.accounts).forEach(([k, a]) => { v['ac-' + k] = a; });
     return v;
+}
+
+/** Primary and sidebar colours: a hand-picked scheme or your own pair. Applied at once and kept in this browser. */
+function ColorSettings() {
+    const [pick, setPick] = useState<ColorChoice>(colorChoice);
+    const shown = activeScheme();
+    const [accent, setAccent] = useState(shown.accent[0]);
+    const [side, setSide] = useState(shown.side[0]);
+    const choose = (next: ColorChoice) => { setColors(next); setPick(colorChoice()); };
+    const custom = (a: string, s: string) => { setAccent(a); setSide(s); choose({ scheme: 'custom', accent: a, side: s }); };
+    const fixed = pick.scheme === 'custom' && readable(accent, side).changed;
+    return (
+        <section className="card pad"><h3>Colours</h3>
+            <p className="note" style={{ marginBottom: '12px' }}>The primary colour is used for buttons, links, tabs and highlights; the sidebar colour for the navigation panel. Both adapt to the light and dark themes. Saved in this browser for you only.</p>
+            <div className="scheme-grid" role="group" aria-label="Colour scheme">
+                {SCHEMES.map(sc => {
+                    const on = pick.scheme === sc.id;
+                    return (
+                        <button key={sc.id} type="button" className="scheme" aria-pressed={on} onClick={() => { setAccent(sc.accent[0]); setSide(sc.side[0]); choose({ scheme: sc.id }); }}>
+                            <span className="scheme-preview" aria-hidden="true">
+                                <span className="scheme-side" style={{ background: sc.side[0] }}><i /><i /><i /></span>
+                                <span className="scheme-main"><i style={{ background: sc.accent[0] }} /><b /><b /></span>
+                            </span>
+                            <span className="scheme-name">{sc.name}{sc.id === DEFAULT_SCHEME ? ' (default)' : ''}</span>
+                        </button>
+                    );
+                })}
+            </div>
+            <div className="row4" style={{ marginTop: '14px' }}>
+                <div className="fg"><label htmlFor="c-accent">Primary colour</label><input type="color" id="c-accent" className="color-input" value={accent} onChange={e => custom(e.target.value, side)} /></div>
+                <div className="fg"><label htmlFor="c-side">Sidebar colour</label><input type="color" id="c-side" className="color-input" value={side} onChange={e => custom(accent, e.target.value)} /></div>
+                <div className="fg" style={{ gridColumn: 'span 2', alignSelf: 'end' }}>
+                    {pick.scheme === 'custom' && <button type="button" className="btn btn-ghost" onClick={() => { setAccent(SCHEMES[0].accent[0]); setSide(SCHEMES[0].side[0]); choose({ scheme: DEFAULT_SCHEME }); }}>Reset to default</button>}
+                </div>
+            </div>
+            {fixed && <div className="hint">Your colours were darkened slightly so white text on buttons and in the sidebar stays readable.</div>}
+        </section>
+    );
 }
 
 function SettingsForm({ onSaved }: { onSaved: () => void }) {
@@ -85,6 +124,7 @@ function SettingsForm({ onSaved }: { onSaved: () => void }) {
                     <div></div>
                 </div>
             </section>
+            <ColorSettings />
             <section className="card pad"><h3>Accounting policies</h3>
                 <div className="row3">
                     <div className="fg"><label htmlFor="s-conv">Discount rate convention</label><select {...bind('s-conv')}><option value="effective">Effective annual: (1+r)^(1/12)-1</option><option value="nominal">Nominal: r ÷ payments per year</option></select><div className="hint">The IASB illustrative examples use effective. Both agree for annual payments.</div></div>

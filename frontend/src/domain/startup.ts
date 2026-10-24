@@ -1,5 +1,6 @@
 /* Start-up: theme, workspace load and the enterprise layer. */
 import { SETTINGS } from './settings';
+import { applyColors, loadColors } from './colors';
 import { Store } from './store';
 import { notify } from './state';
 import { Ent, audit, entities, myRole, policy, resolveNames, roleLabel } from './enterprise';
@@ -9,11 +10,13 @@ const sysDark: MediaQueryList | { matches: boolean } = window.matchMedia ? windo
 export function applyTheme(): void {
     const t = SETTINGS.theme === 'system' ? (sysDark.matches ? 'dark' : 'light') : SETTINGS.theme;
     document.documentElement.dataset.theme = t;
+    applyColors();
 }
 
-/** Theme from this browser, then follow the system theme when "Match system" is chosen. */
+/** Theme and colours from this browser, then follow the system theme when "Match system" is chosen. */
 export function initTheme(): void {
     try { const t = localStorage.getItem('ifrs16.theme'); if (t) SETTINGS.theme = t as typeof SETTINGS.theme; } catch { /* storage unavailable */ }
+    loadColors();
     applyTheme();
     if ('addEventListener' in sysDark) sysDark.addEventListener('change', () => { if (SETTINGS.theme === 'system') { applyTheme(); notify(); } });
 }

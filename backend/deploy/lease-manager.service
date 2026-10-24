@@ -1,0 +1,16 @@
+# Native install without Docker (systemd). Assumes the app in /opt/lease-manager and PostgreSQL installed locally.
+[Unit]
+Description=IFRS 16 Lease Manager
+After=network-online.target postgresql.service
+[Service]
+User=leasemgr
+WorkingDirectory=/opt/lease-manager
+EnvironmentFile=/etc/lease-manager/env
+ExecStart=/usr/bin/node src/server.js
+Restart=on-failure
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+[Install]
+WantedBy=multi-user.target

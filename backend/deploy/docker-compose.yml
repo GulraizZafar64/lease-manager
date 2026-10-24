@@ -1,0 +1,38 @@
+# On-premises deployment: PostgreSQL + application + Caddy (HTTPS).
+# Only Caddy is exposed; the database and application are on an internal network.
+name: lease-manager
+services:
+  db:
+    image: postgres:16.4-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: leasedb
+      POSTGRES_USER: lease
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets: [db_password]
+    volumes: [dbdata:/var/lib/postgresql/data]
+    networks: [internal]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U lease -d leasedb"], interval: 10s, retries: 10 }
+  app:
+    image: lease-manager:${APP_VERSION:-0.1.0}
+    build: { context: .. }
+    restart: unless-stopped
+    env_file: ../.env
+    environment:
+      TRUST_PROXY: "true"
+    depends_on: { db: { condition: service_healthy } }
+    networks: [internal]
+  proxy:
+    image: caddy:2.8.4
+    restart: unless-stopped
+    ports: ["443:443", "80:80"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/certs:ro
+      - caddydata:/data
+    depends_on: [app]
+    networks: [internal]
+secrets:
+  db_password: { file: ./secrets/db_password.txt }
+volumes: { dbdata: {}, caddydata: {} }
+networks: { internal: {} }

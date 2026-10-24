@@ -1,0 +1,62 @@
+/* Platform console (/platform). */
+.pf { min-height: 100vh; background: var(--bg); }
+.pf-bar {
+    position: sticky; top: 0; z-index: 50; display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 12px 28px; background: var(--side); color: var(--side-text);
+}
+.pf-brand { display: flex; align-items: center; gap: 11px; }
+.pf-brand b { display: block; color: #fff; font-size: 14.5px; font-weight: 600; }
+.pf-brand span { font-size: 12px; color: color-mix(in srgb, var(--accent) 45%, #fff); font-weight: 500; }
+.pf-user { display: flex; align-items: center; gap: 10px; }
+.pf-user > div { display: flex; flex-direction: column; line-height: 1.3; }
+.pf-user b { color: #fff; font-size: 13px; font-weight: 600; }
+.pf-user span { font-size: 11.5px; opacity: .75; }
+.pf-user .who-avatar { background: color-mix(in srgb, var(--accent) 30%, transparent); color: #fff; }
+.pf-user .btn { margin-left: 6px; }
+
+.pf-main { max-width: 1240px; margin: 0 auto; padding: 26px 28px 48px; }
+.pf-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+.pf-head h1 { font-size: 24px; font-weight: 600; letter-spacing: -.01em; }
+.pf-head .note { max-width: 640px; margin-top: 4px; }
+
+.pf-table td { vertical-align: middle; }
+.pf-toolbar { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.pf-table tr.is-inactive td { background: color-mix(in srgb, var(--surface-2) 70%, transparent); }
+.pf-table tr.is-inactive .pf-co b, .pf-table tr.is-inactive .pf-super { color: var(--muted); }
+.pf-table tr.is-inactive .pf-co-ic { background: var(--neutral-bg); color: var(--neutral); }
+.pf-co { display: flex; align-items: center; gap: 11px; min-width: 200px; }
+.pf-co-ic { display: grid; place-items: center; width: 34px; height: 34px; flex-shrink: 0; border-radius: 9px; background: var(--accent-soft); color: var(--accent); }
+.pf-co > div { display: flex; flex-direction: column; line-height: 1.35; }
+.pf-co b { color: var(--strong); font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.pf-co span { font-size: 12px; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.pf-co b .badge { font-family: var(--font); }
+.pf-supers { display: flex; flex-direction: column; gap: 5px; }
+.pf-super { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--strong); font-weight: 500; white-space: nowrap; }
+.pf-super em { font-style: normal; font-weight: 400; color: var(--muted); }
+
+.pf-tag { display: inline-block; margin-bottom: 12px; padding: 2px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 600; }
+.pf-admin-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: start; }
+.pf-remove { margin-top: 24px; }
+.pf-add-admin { margin-bottom: 12px; }
+.pf-created { text-align: center; }
+.pf-created-icon { display: grid; place-items: center; width: 48px; height: 48px; margin: 4px auto 12px; border-radius: 50%; background: var(--ok-bg); color: var(--ok); font-size: 22px; font-weight: 700; }
+.pf-created h3 { font-size: 18px; margin-bottom: 6px; }
+.pf-created > .note { max-width: 520px; margin: 0 auto; }
+.pf-admin-list { list-style: none; padding: 0; margin: 16px auto; max-width: 560px; display: grid; gap: 6px; text-align: left; }
+.pf-admin-list li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
+.pf-admin-list li > div:first-child { display: flex; flex-direction: column; min-width: 0; }
+.pf-admin-list span { color: var(--muted); }
+.pf-temp { display: flex; align-items: center; gap: 6px; }
+.pf-temp code { padding: 3px 8px; border-radius: 6px; background: var(--surface-2); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; color: var(--strong); }
+.pf-temp-note { max-width: 520px; margin: 14px auto 0; padding: 9px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--warn); font-size: 12.5px; text-align: left; }
+.pf-temp-note b { color: inherit; }
+.pf-label { display: block; text-align: left; max-width: 520px; margin: 0 auto 6px; }
+.pf-copy { display: flex; gap: 8px; max-width: 520px; margin: 0 auto; }
+.pf-copy input { flex: 1; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+.pf-created .hint { max-width: 520px; margin: 8px auto 0; }
+
+@media (max-width: 700px) {
+    .pf-bar { padding: 10px 14px; } .pf-user > div { display: none; }
+    .pf-main { padding: 18px 14px 40px; }
+    .pf-admin-row { grid-template-columns: 1fr; } .pf-remove { margin-top: 0; justify-self: start; }
+}

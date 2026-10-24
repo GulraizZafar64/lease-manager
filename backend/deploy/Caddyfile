@@ -1,0 +1,10 @@
+# Replace leases.company.local with the server name your users will type.
+# Option A (most companies): your own certificate from the internal CA, placed in deploy/certs/.
+leases.company.local {
+    tls /certs/server.crt /certs/server.key
+    encode gzip
+    reverse_proxy app:8080
+    header -Server
+}
+# Option B: Caddy's own internal CA (users must trust Caddy's root certificate). Replace the tls line with:
+#    tls internal

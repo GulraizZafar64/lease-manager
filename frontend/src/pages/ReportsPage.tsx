@@ -11,6 +11,7 @@ import { getSample, aiErr } from '../domain/ai';
 import { go, setParams } from '../domain/nav';
 import { useAppState } from '../hooks/useAppState';
 import { exportMenu } from '../components/common/ExportMenu';
+import { ReportVisuals } from '../components/reports/ReportVisuals';
 import { confirmDialog } from '../components/common/ConfirmDialog';
 import { Modal, toast } from '../utils/uiStore';
 import { saveFile } from '../utils/files';
@@ -196,6 +197,7 @@ export function ReportsPage({ params: p }: ScreenProps<'reports'>) {
                         <>
                             <h2>{rep.title}</h2>
                             <p className="note" style={{ margin: '4px 0 14px' }}>{`${SETTINGS.entity}. ${fmtDate(from)} to ${fmtDate(to)}. ${presentationCcy()}${unitNote()}${SCOPE.entity ? '. Entity: ' + SCOPE.entity : ''}.`}</p>
+                            <ReportVisuals kind={report} from={from} to={to} rep={rep} />
                             {rep.parts.map((part, i) => <Part key={i} part={part} />)}
                         </>
                     )}

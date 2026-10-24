@@ -224,3 +224,7 @@
     .nav-toggle .nav-count { margin: 0; }
     .side.open .nav-menu { padding-bottom: 6px; }
 }
+
+/* Two-column list-and-detail screens (reports, bank, guidance) on narrow screens: one column that never grows past
+   the screen, so wide statement tables scroll inside their own box instead of widening the page */
+@media (max-width: 1100px) { .kb { grid-template-columns: minmax(0, 1fr); } .kb > * { min-width: 0; } }

@@ -14,6 +14,7 @@ import { useAppState } from '../hooks/useAppState';
 import { BAR, ChartCanvas, MAX_SERIES, baseOptions, foldOther, pointer, vizTheme } from '../components/common/ChartCanvas';
 import { exportMenu } from '../components/common/ExportMenu';
 import { CommitInput } from '../components/ops/CommitInput';
+import { StatTile } from '../components/common/Viz';
 import { cap, fmtNum, sum, unitNote } from '../utils/format';
 import { fmtDate } from '../utils/dates';
 import { md } from '../utils/html';
@@ -46,9 +47,16 @@ function Forecast({ p }: { p: P }) {
         [months, version]);
     const config = useMemo(() => forecastConfig(b), [b]);
     let c = 0;
+    const out = sum(b, x => x.out), inn = sum(b, x => x.inn), peak = b.reduce((m, x) => x.out > m.out ? x : m, b[0]);
     return (
         <>
             <Note />
+            <div className="stat-tiles an-tiles">
+                <StatTile label={`Lease payments, next ${months} months`} value={fmtNum(out)} />
+                <StatTile label={`Lease receipts, next ${months} months`} value={fmtNum(inn)} />
+                <StatTile label="Net cash flow" value={fmtNum(inn - out)} sub={inn - out < 0 ? 'Net outflow' : 'Net inflow'} />
+                {peak && peak.out ? <StatTile label="Largest month for payments" value={fmtNum(peak.out)} sub={peak.label} /> : null}
+            </div>
             <div className="btn-row" style={{ marginBottom: '10px' }}><div className="seg">{[12, 24, 60].map(m => <button key={m} data-m={m} aria-pressed={months === m} onClick={() => setParams<'analytics'>({ months: m })}>{m} months</button>)}</div><button className="btn btn-ghost btn-sm" id="fc-exp" onClick={e => exportMenu(e.currentTarget, () => [{ name: 'Cash forecast', rows: [['Month', 'Payments', 'Receipts', 'Net'], ...b.map(x => [x.label, x.out, x.inn, x.inn - x.out])] }], 'Lease_cash_forecast', 'Lease cash-flow forecast')}>Export</button></div>
             <p className="note" style={{ marginBottom: '6px' }}>Payments by asset class are shown below the line, receipts above it.</p>
             <div className="chart-box" style={{ height: '300px' }}><ChartCanvas id="fc-chart" config={config} label="Lease payments by asset class and lease receipts, by month" /></div>
@@ -61,15 +69,25 @@ function Forecast({ p }: { p: P }) {
 
 function Scenario({ p }: { p: P }) {
     const sc = p.sc || 'extend', S = SCENARIOS[sc], v = p.v ?? S.param[1];
-    const r = runScenario(sc, num(v)), d = (k: 'L' | 'cost' | 'cash') => r.after[k] - r.before[k];
+    const version = useAppState();
+    const r = useMemo(() => runScenario(sc, num(v)), [sc, v, version]), d = (k: 'L' | 'cost' | 'cash') => r.after[k] - r.before[k]; // eslint-disable-line react-hooks/exhaustive-deps
+    const config = useMemo(() => {
+        const t = vizTheme(), keys = ['L', 'cost', 'cash'] as const;
+        return { type: 'bar', data: { labels: ['Lease liabilities', `Lease cost`, 'Lease cash paid'], datasets: [
+            { label: 'Current', data: keys.map(k => r.before[k]), backgroundColor: t.series[0], ...BAR, maxBarThickness: 28 },
+            { label: 'Scenario', data: keys.map(k => r.after[k]), backgroundColor: t.series[1], ...BAR, maxBarThickness: 28 }] }, options: baseOptions(t, { legend: true }) } as unknown as ChartConfiguration;
+    }, [r]);
     return (
         <>
             <Note />
             <div className="row3"><div className="fg"><label htmlFor="sc-k">Scenario</label><select id="sc-k" value={sc} onChange={e => setParams<'analytics'>({ sc: e.target.value, v: SCENARIOS[e.target.value].param[1] })}>{Object.entries(SCENARIOS).map(([k, x]) => <option key={k} value={k}>{x.label}</option>)}</select><div className="hint">{S.desc}</div></div><div className="fg"><label htmlFor="sc-v">{S.param[0]}</label><CommitInput type="number" step="any" id="sc-v" key={`${sc}|${v}`} defaultValue={v} onCommit={i => setParams<'analytics'>({ v: i.value })} /></div><div></div></div>
-            <table className="stmt" style={{ maxWidth: '720px' }}><thead><tr><th>{r.affected} leases affected</th><th className="num">Current</th><th className="num">Scenario</th><th className="num">Change</th></tr></thead><tbody>
+            <div className="an-split">
+            <figure className="an-fig"><figcaption>Current against scenario<span>{`${r.affected} leases affected; cost and cash for ${r.period}`}</span></figcaption><div className="chart-box" style={{ height: '240px' }}><ChartCanvas id="sc-chart" config={config} label="Current and scenario figures for liabilities, cost and cash" /></div></figure>
+            <div className="scroll-x"><table className="stmt" style={{ maxWidth: '720px' }}><thead><tr><th>{r.affected} leases affected</th><th className="num">Current</th><th className="num">Scenario</th><th className="num">Change</th></tr></thead><tbody>
                 <tr><td>{`Lease liabilities at ${fmtDate(AS_OF)}${sc === 'fx' ? '' : ' (before the change takes effect)'}`}</td><td className="num">{fmtNum(r.before.L)}</td><td className="num">{fmtNum(r.after.L)}</td><td className="num">{fmtNum(d('L'))}</td></tr>
                 <tr><td>Lease cost, {r.period}</td><td className="num">{fmtNum(r.before.cost)}</td><td className="num">{fmtNum(r.after.cost)}</td><td className="num">{fmtNum(d('cost'))}</td></tr>
-                <tr><td>Lease cash paid, {r.period}</td><td className="num">{fmtNum(r.before.cash)}</td><td className="num">{fmtNum(r.after.cash)}</td><td className="num">{fmtNum(d('cash'))}</td></tr></tbody></table>
+                <tr><td>Lease cash paid, {r.period}</td><td className="num">{fmtNum(r.before.cash)}</td><td className="num">{fmtNum(r.after.cash)}</td><td className="num">{fmtNum(d('cash'))}</td></tr></tbody></table></div>
+            </div>
             <p className="note" style={{ marginTop: '8px' }}>The scenario runs on copies of your leases; nothing is saved. For balances after the change, see the cost and cash lines; the balance sheet effect appears from the effective date.</p>
         </>
     );

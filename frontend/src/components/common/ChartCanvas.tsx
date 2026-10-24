@@ -81,6 +81,18 @@ export function markerLine(index: number, label: string): Plugin {
     };
 }
 
+/** A roll-forward as a waterfall: balances as full bars in a neutral ink, each movement floating from the running total.
+    Increases and decreases take two opposing series colours; the key is given beside the chart (see WaterfallKey). */
+export interface WaterStep { label: string; value: number; total?: boolean }
+export function waterfallConfig(t: Viz, steps: WaterStep[]): ChartConfiguration {
+    let run = 0;
+    const ranges = steps.map(s => { if (s.total) { run = s.value; return [0, s.value]; } const a = run; run += s.value; return [a, run]; });
+    const colour = (s: WaterStep) => s.total ? t.muted : s.value >= 0 ? t.series[0] : t.series[1];
+    const options = baseOptions(t) as unknown as { plugins: { tooltip: { callbacks: Record<string, unknown> } } };
+    options.plugins.tooltip.callbacks = { label: (c: { dataIndex: number }) => { const s = steps[c.dataIndex]; return ` ${s.total ? '' : s.value >= 0 ? '+' : '−'}${fmtNum(Math.abs(s.value))}`; } };
+    return { type: 'bar', data: { labels: steps.map(s => s.label), datasets: [{ label: 'Amount', data: ranges, backgroundColor: steps.map(colour), ...BAR, maxBarThickness: 36, borderRadius: 3, borderSkipped: false }] }, options } as unknown as ChartConfiguration;
+}
+
 /** Fold everything past the first `keep` keys (by size) into one "Other" entry, so series never run out of colours. */
 export function foldOther<K extends string>(totals: Record<K, number>, keep = MAX_SERIES - 1): { keys: K[]; other: K[] } {
     const sorted = (Object.keys(totals) as K[]).sort((a, b) => Math.abs(totals[b]) - Math.abs(totals[a]));

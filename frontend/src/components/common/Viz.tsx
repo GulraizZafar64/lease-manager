@@ -65,3 +65,15 @@ export function VizCard({ id, title, sub, action, config, columns, rows, empty, 
         </section>
     );
 }
+
+/** A figure with its label: a button when it leads somewhere, otherwise plain. */
+export function StatTile({ label, value, sub, tone, onClick, children }: { label: string; value: string; sub?: ReactNode; tone?: 'bad'; onClick?: () => void; children?: ReactNode }) {
+    const body = <><span className="st-l">{label}</span><span className="st-v">{value}</span>{sub ? <span className="st-s">{sub}</span> : null}{children}</>;
+    const cls = `stat-tile${tone ? ' st-' + tone : ''}`;
+    return onClick ? <button type="button" className={cls} onClick={onClick}>{body}</button> : <div className={cls + ' st-static'}>{body}</div>;
+}
+
+/** Key for a waterfall: balances, increases, decreases. */
+export function WaterfallKey() {
+    return <span className="wf-key" aria-hidden="true"><span><i className="wf-total" />Balance</span><span><i className="wf-up" />Increase</span><span><i className="wf-down" />Decrease</span></span>;
+}

@@ -15,7 +15,7 @@ Console › **Compute › Instances › Create instance**:
 
 | Setting | Choose |
 |---|---|
-| Image | **Canonical Ubuntu 24.04** |
+| Image | **Canonical Ubuntu 24.04** (Oracle Linux 9, the console's default, also works) |
 | Shape | **Ampere VM.Standard.A1.Flex**, 2 OCPU and 12 GB memory (Always Free covers up to 4 OCPU and 24 GB in total). If it says "out of capacity", try another availability domain or try again later; **VM.Standard.E2.1.Micro** (AMD, 1 GB) also works, more slowly |
 | SSH keys | **Generate a key pair** and download the private key (or paste your own public key) |
 
@@ -33,14 +33,19 @@ On the instance page, open the **Subnet** › **Default Security List** › **Ad
 
 ## 4. Get a free web address
 Sign in at **duckdns.org**, add a subdomain (for example `northwind-leases`) and set its IP to the server's public IP.
-Your address is then `northwind-leases.duckdns.org`. A domain you own works the same way: add an A record for the
+Your address is then `northwind-leases.duckdns.org`. Without an account, `<IP with dashes>.sslip.io` (for example `203-0-113-7.sslip.io`) points at the IP by itself. A domain you own works the same way: add an A record for the
 server's IP.
 
 ## 5. Install
-Connect to the server (on Windows use PowerShell; the user is `ubuntu`):
+Connect to the server (on Windows use PowerShell; the user is `ubuntu` on Ubuntu and `opc` on Oracle Linux):
 ```bash
 chmod 600 ~/Downloads/ssh-key.key
 ssh -i ~/Downloads/ssh-key.key ubuntu@<public IP>
+```
+On Oracle Linux, first install git (`sudo dnf install -y git`). On the 1 GB **E2.1.Micro** shape running Oracle Linux, also
+give the 448 MB that the image reserves for crash dumps back to the system, then reconnect:
+```bash
+sudo systemctl disable --now kdump && sudo grubby --update-kernel=ALL --remove-args=crashkernel && sudo reboot
 ```
 Then:
 ```bash

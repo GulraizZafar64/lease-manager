@@ -9,31 +9,50 @@ ENV_FILE=deploy/.env
 COMPOSE="sudo docker compose -f $ROOT/deploy/docker-compose.yml"
 say() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 
-command -v apt-get >/dev/null || { echo "This script expects Ubuntu or Debian."; exit 1; }
+if command -v apt-get >/dev/null; then PKG=apt
+elif command -v dnf >/dev/null; then PKG=dnf
+else echo "This script expects Ubuntu, Debian, or Oracle Linux / RHEL 8 or later."; exit 1; fi
 
 # 1. Docker
 if ! command -v docker >/dev/null; then
     say "Installing Docker"
-    curl -fsSL https://get.docker.com | sudo sh
+    if [ "$PKG" = apt ]; then
+        curl -fsSL https://get.docker.com | sudo sh
+    else
+        # get.docker.com does not cover Oracle Linux; Docker's RHEL packages do
+        sudo dnf install -y -q dnf-plugins-core
+        sudo dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo
+        sudo dnf install -y -q docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    fi
+    sudo systemctl enable --now docker
 fi
-sudo docker compose version >/dev/null || { echo "The Docker Compose plugin is missing (sudo apt-get install docker-compose-plugin)."; exit 1; }
+sudo docker compose version >/dev/null || { echo "The Docker Compose plugin is missing (install docker-compose-plugin)."; exit 1; }
 
-# 2. Firewall. Oracle's Ubuntu images allow only SSH in iptables; open the web ports now and after a restart.
+# 2. Firewall. Oracle's images allow only SSH; open the web ports now and after a restart.
 #    (Ports 80 and 443 must also be allowed in the cloud console: see deploy/README.md.)
 say "Opening ports 80 and 443"
-for rule in "-p tcp --dport 80" "-p tcp --dport 443" "-p udp --dport 443"; do
-    # shellcheck disable=SC2086
-    sudo iptables -C INPUT $rule -j ACCEPT 2>/dev/null || sudo iptables -I INPUT 1 $rule -j ACCEPT
-done
-RULES=/etc/iptables/rules.v4
-if sudo test -f "$RULES" && ! sudo grep -q -- '--dport 443 -j ACCEPT' "$RULES"; then
-    sudo sed -i '/^-A INPUT -j REJECT/i -A INPUT -p tcp -m tcp --dport 80 -j ACCEPT\n-A INPUT -p tcp -m tcp --dport 443 -j ACCEPT\n-A INPUT -p udp -m udp --dport 443 -j ACCEPT' "$RULES"
+if systemctl is-active --quiet firewalld; then
+    sudo firewall-cmd -q --permanent --add-service=http --add-service=https --add-port=443/udp
+    sudo firewall-cmd -q --reload
+else
+    for rule in "-p tcp --dport 80" "-p tcp --dport 443" "-p udp --dport 443"; do
+        # shellcheck disable=SC2086
+        sudo iptables -C INPUT $rule -j ACCEPT 2>/dev/null || sudo iptables -I INPUT 1 $rule -j ACCEPT
+    done
+    RULES=/etc/iptables/rules.v4
+    if sudo test -f "$RULES" && ! sudo grep -q -- '--dport 443 -j ACCEPT' "$RULES"; then
+        sudo sed -i '/^-A INPUT -j REJECT/i -A INPUT -p tcp -m tcp --dport 80 -j ACCEPT\n-A INPUT -p tcp -m tcp --dport 443 -j ACCEPT\n-A INPUT -p udp -m udp --dport 443 -j ACCEPT' "$RULES"
+    fi
 fi
 
 # 3. Swap on small machines, so building the web app does not run out of memory
-if [ "$(awk '/MemTotal/ {print int($2 / 1024)}' /proc/meminfo)" -lt 2000 ] && [ -z "$(swapon --show)" ]; then
+MEM_MB=$(awk '/MemTotal/ {print int($2 / 1024)}' /proc/meminfo)
+SWAP_MB=$(awk '/SwapTotal/ {print int($2 / 1024)}' /proc/meminfo)
+if [ "$MEM_MB" -lt 2000 ] && [ "$SWAP_MB" -lt 2000 ] && ! grep -q '^/swapfile ' /proc/swaps; then
     say "Adding 2 GB of swap"
-    sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile >/dev/null && sudo swapon /swapfile
+    sudo dd if=/dev/zero of=/swapfile bs=1M count=2048 status=none && sudo chmod 600 /swapfile
+    command -v chcon >/dev/null && sudo chcon -t swapfile_t /swapfile 2>/dev/null || true
+    sudo mkswap /swapfile >/dev/null && sudo swapon /swapfile
     grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab >/dev/null
 fi
 

@@ -32,7 +32,8 @@ sudo docker compose version >/dev/null || { echo "The Docker Compose plugin is m
 #    (Ports 80 and 443 must also be allowed in the cloud console: see deploy/README.md.)
 say "Opening ports 80 and 443"
 if systemctl is-active --quiet firewalld; then
-    sudo firewall-cmd -q --permanent --add-service=http --add-service=https --add-port=443/udp
+    sudo firewall-cmd -q --permanent --add-service=http --add-service=https
+    sudo firewall-cmd -q --permanent --add-port=443/udp
     sudo firewall-cmd -q --reload
 else
     for rule in "-p tcp --dport 80" "-p tcp --dport 443" "-p udp --dport 443"; do

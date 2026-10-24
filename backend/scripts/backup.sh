@@ -14,7 +14,9 @@ $COMPOSE exec -T db pg_dump -U lease -d leasedb -Fc \
   | openssl enc -aes-256-cbc -pbkdf2 -iter 250000 -salt -pass "file:$BACKUP_PASSFILE" -out "$OUT"
 sha256sum "$OUT" > "$OUT.sha256"
 # Prove the backup is readable before deleting old ones
-openssl enc -d -aes-256-cbc -pbkdf2 -iter 250000 -pass "file:$BACKUP_PASSFILE" -in "$OUT" | head -c 5 | grep -q PGDMP
+#   (head stops reading after 5 bytes, so openssl's write error is expected and ignored)
+MAGIC=$(openssl enc -d -aes-256-cbc -pbkdf2 -iter 250000 -pass "file:$BACKUP_PASSFILE" -in "$OUT" 2>/dev/null | head -c 5 || true)
+[ "$MAGIC" = PGDMP ] || { echo "Backup check failed: $OUT is not a readable dump" >&2; exit 1; }
 find "$BACKUP_DIR" -name 'leasedb-*.dump.enc*' -mtime +"$KEEP_DAYS" -delete
 echo "Backup written: $OUT"
 # Copy $BACKUP_DIR to a second location (another server or offline media) as part of disaster recovery.

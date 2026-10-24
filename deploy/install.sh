@@ -109,11 +109,12 @@ fi
 curl -fsS "https://$DOMAIN/api/health"; echo
 
 # 7. The platform owner (you): signs in at /platform and adds companies
-OWNERS=$($COMPOSE exec -T db psql -U lease -d leasedb -tAc "SELECT count(*) FROM platform_admins" | tr -d '[:space:]')
+#    (</dev/null: docker compose exec would otherwise read this script's input, including answers meant for later prompts)
+OWNERS=$($COMPOSE exec -T db psql -U lease -d leasedb -tAc "SELECT count(*) FROM platform_admins" </dev/null | tr -d '[:space:]')
 if [ "$OWNERS" = "0" ]; then
     say "Your platform owner account"
     read -r -p "Your name: " NAME
-    $COMPOSE exec -T app node src/cli.js create-platform-owner "$ACME_EMAIL" "${NAME:-Platform owner}"
+    $COMPOSE exec -T app node src/cli.js create-platform-owner "$ACME_EMAIL" "${NAME:-Platform owner}" </dev/null
 fi
 
 # 8. Nightly encrypted backups on this server (copy them elsewhere too)

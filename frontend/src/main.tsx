@@ -8,6 +8,7 @@ import './styles/forms.css';
 import './styles/import.css';
 import './styles/approvals.css';
 import './styles/users.css';
+import './styles/minimal.css';
 import App from './App';
 import { PlatformApp } from './platform/PlatformApp';
 import { installErrorCapture } from './domain/enterprise';

@@ -99,7 +99,7 @@ export function Sidebar() {
         <nav className={`side${menuOpen ? ' open' : ''}${collapsed ? ' collapsed' : ''}`} aria-label="Main" ref={nav}>
             <div className="brand"><div className="brand-mark" aria-hidden="true">16</div><div className="brand-text"><b>IFRS 16 Lease Manager</b><span>{currentCompany()?.name || 'Lessee and lessor accounting'}</span></div>
                 <button type="button" className="side-collapse" id="side-collapse" aria-expanded={!collapsed} aria-controls="nav-menu" aria-label={collapsed ? 'Expand the sidebar' : 'Collapse the sidebar to icons'} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} onClick={toggleCollapsed}>
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={collapsed ? 'M13 6l6 6-6 6M5 6l6 6-6 6' : 'M11 18l-6-6 6-6M19 18l-6-6 6-6'} /></svg>
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={collapsed ? 'M9 6l6 6-6 6' : 'M15 18l-6-6 6-6'} /></svg>
                 </button>
                 <button type="button" className="nav-toggle" id="nav-toggle" aria-expanded={menuOpen} aria-controls="nav-menu" aria-label={menuOpen ? 'Close menu' : 'Open menu'} onClick={() => setMenuOpen(o => !o)}>
                     {pending ? <span className="nav-count" aria-hidden="true">{pending}</span> : null}

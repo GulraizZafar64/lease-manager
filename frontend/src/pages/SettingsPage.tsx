@@ -62,7 +62,7 @@ function ColorSettings() {
                     return (
                         <button key={sc.id} type="button" className="scheme" aria-pressed={on} onClick={() => { setAccent(sc.accent[0]); setSide(sc.side[0]); choose({ scheme: sc.id }); }}>
                             <span className="scheme-preview" aria-hidden="true">
-                                <span className="scheme-side" style={{ background: sc.side[0] }}><i /><i /><i /></span>
+                                <span className={`scheme-side${sc.id === DEFAULT_SCHEME ? ' scheme-light' : ''}`} style={{ background: sc.side[0] }}><i /><i /><i /></span>
                                 <span className="scheme-main"><i style={{ background: sc.accent[0] }} /><b /><b /></span>
                             </span>
                             <span className="scheme-name">{sc.name}{sc.id === DEFAULT_SCHEME ? ' (default)' : ''}</span>

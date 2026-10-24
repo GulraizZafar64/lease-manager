@@ -16,7 +16,7 @@ export interface ColorScheme {
 /** Hand-picked pairs. Each light primary keeps white button text at 4.5:1 or better, and each sidebar keeps its
     grey group headings at 4.5:1. The first is the stylesheet's own scheme. */
 export const SCHEMES: ColorScheme[] = [
-    { id: 'teal', name: 'Teal and navy', accent: ['#0e7c6b', '#34b39c'], side: ['#13233a', '#0a1118'] },
+    { id: 'teal', name: 'Teal, light sidebar', accent: ['#0e7c6b', '#34b39c'], side: ['#13233a', '#0a1118'] },
     { id: 'ocean', name: 'Ocean blue', accent: ['#1f5fbf', '#5b9cf0'], side: ['#0f1f3d', '#08101f'] },
     { id: 'indigo', name: 'Indigo', accent: ['#4f46e5', '#8b85f5'], side: ['#1c1a46', '#0e0d24'] },
     { id: 'forest', name: 'Forest green', accent: ['#17803f', '#45c27a'], side: ['#0e251b', '#08150f'] },
@@ -98,6 +98,8 @@ export const colorChoice = (): ColorChoice => ({ ...choice });
 export function applyColors(): void {
     const root = document.documentElement, style = root.style;
     const scheme = activeScheme();
+    // The default scheme's sidebar sits on the page; any other keeps its own colour (minimal.css)
+    root.dataset.nav = scheme.id === DEFAULT_SCHEME ? 'page' : 'color';
     if (scheme.id === DEFAULT_SCHEME) { TOKENS.forEach(t => style.removeProperty(t)); return; }
     const dark = root.dataset.theme === 'dark', i = dark ? 1 : 0;
     const accent = scheme.accent[i], side = scheme.side[i];

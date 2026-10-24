@@ -1,4 +1,4 @@
-import { useRef, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useSyncExternalStore } from 'react';
 import type { ScreenProps } from './registry';
 import { SETTINGS } from '../domain/settings';
 import { AS_OF, SCOPE } from '../domain/state';
@@ -166,6 +166,9 @@ function Drafts({ draftId }: { draftId: string | null | undefined }) {
     );
 }
 
+/** Short names for the report tabs; the full title and reference show on hover and above the report. */
+const SHORT: Record<string, string> = { note: 'Disclosure note', rou: 'Right-of-use assets', liability: 'Lease liabilities', maturity: 'Maturity', pl: 'P&L and cash flows', lessor: 'Lessor', fx: 'Foreign currency', commitments: 'Commitments', checklist: 'Checklist', drafts: 'AI drafts' };
+
 export function ReportsPage({ params: p }: ScreenProps<'reports'>) {
     useAppState();
     const fy = fyBounds(AS_OF);
@@ -173,35 +176,42 @@ export function ReportsPage({ params: p }: ScreenProps<'reports'>) {
     const rep = buildReport(report, from, to);
     const lastFy = fyBounds(addDays(fy.start, -1));
     const drafts = report === 'drafts';
+    const meta = REPORTS.find(r => r[0] === report);
+    // Keep the chosen report's tab in view when the tab row scrolls (narrow screens, or arriving from a link)
+    useEffect(() => { document.querySelector('.rp-tabs .tab.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }, [report]);
     return (
-        <div className="kb">
-            <div className="card kb-list">{REPORTS.map(([k, t, d]) => <button key={k} className={`kb-item ${report === k ? 'active' : ''}`} data-r={k} onClick={() => setParams<'reports'>({ report: k })}>{t}<small>{d}</small></button>)}</div>
-            <div className="card">
-                <div className="section-head">
-                    <div className="btn-row">
-                        <label style={{ margin: 0 }}>Period</label>
-                        <input type="date" id="rf" value={from} style={{ width: '150px' }} onChange={e => setParams<'reports'>({ from: e.target.value })} />
-                        <span className="muted">to</span>
-                        <input type="date" id="rt" value={to} style={{ width: '150px' }} onChange={e => setParams<'reports'>({ to: e.target.value })} />
-                        <button className="btn btn-ghost btn-sm" data-pre="fytd" onClick={() => setParams<'reports'>({ from: fy.start, to: AS_OF })}>{fy.label} to date</button>
-                        <button className="btn btn-ghost btn-sm" data-pre="lastfy" onClick={() => setParams<'reports'>({ from: lastFy.start, to: lastFy.end })}>{lastFy.label}</button>
-                    </div>
-                    <div className="btn-row">
-                        {report === 'note' && can('ai.use') ? <button className="btn btn-ghost" onClick={() => { void aiDraftDisclosure(from, to); }}>Draft narrative with AI</button> : null}
-                        <button className="btn btn-ghost" id="rp-print" onClick={() => window.print()}>Print</button>
-                        <button className="btn" id="rp-exp" hidden={drafts || undefined} onClick={e => exportMenu(e.currentTarget, () => rep.sheets, rep.title.replace(/\W+/g, '_'), `${rep.title}, ${fmtDate(from)} to ${fmtDate(to)}`)}>Export</button>
-                    </div>
+        <div className="card rp">
+            <div className="tabs rp-tabs" role="tablist" aria-label="Reports">
+                {REPORTS.map(([k, t, d]) => <button key={k} role="tab" aria-selected={report === k} className={`tab ${report === k ? 'active' : ''}`} data-r={k} title={`${t}: ${d}`} onClick={() => setParams<'reports'>({ report: k })}>{SHORT[k] || t}</button>)}
+            </div>
+            <div className="section-head rp-toolbar">
+                <div className="btn-row rp-period">
+                    <label htmlFor="rf" style={{ margin: 0 }}>Period</label>
+                    <input type="date" id="rf" value={from} onChange={e => setParams<'reports'>({ from: e.target.value })} />
+                    <span className="muted">to</span>
+                    <input type="date" id="rt" value={to} aria-label="Period end" onChange={e => setParams<'reports'>({ to: e.target.value })} />
+                    <span className="seg seg-sm" role="group" aria-label="Period presets">
+                        <button type="button" data-pre="fytd" aria-pressed={from === fy.start && to === AS_OF} onClick={() => setParams<'reports'>({ from: fy.start, to: AS_OF })}>{fy.label} to date</button>
+                        <button type="button" data-pre="lastfy" aria-pressed={from === lastFy.start && to === lastFy.end} onClick={() => setParams<'reports'>({ from: lastFy.start, to: lastFy.end })}>{lastFy.label}</button>
+                    </span>
                 </div>
-                <div className="pad" id="rp-body">
-                    {drafts ? <Drafts draftId={p.draft} /> : (
-                        <>
+                <div className="btn-row">
+                    {report === 'note' && can('ai.use') ? <button className="btn btn-ghost" onClick={() => { void aiDraftDisclosure(from, to); }}>Draft narrative with AI</button> : null}
+                    <button className="btn btn-ghost" id="rp-print" onClick={() => window.print()}>Print</button>
+                    <button className="btn" id="rp-exp" hidden={drafts || undefined} onClick={e => exportMenu(e.currentTarget, () => rep.sheets, rep.title.replace(/\W+/g, '_'), `${rep.title}, ${fmtDate(from)} to ${fmtDate(to)}`)}>Export</button>
+                </div>
+            </div>
+            <div className="pad rp-body" id="rp-body">
+                {drafts ? <Drafts draftId={p.draft} /> : (
+                    <>
+                        <header className="rp-title">
                             <h2>{rep.title}</h2>
-                            <p className="note" style={{ margin: '4px 0 14px' }}>{`${SETTINGS.entity}. ${fmtDate(from)} to ${fmtDate(to)}. ${presentationCcy()}${unitNote()}${SCOPE.entity ? '. Entity: ' + SCOPE.entity : ''}.`}</p>
-                            <ReportVisuals kind={report} from={from} to={to} rep={rep} />
-                            {rep.parts.map((part, i) => <Part key={i} part={part} />)}
-                        </>
-                    )}
-                </div>
+                            <p className="note">{`${SETTINGS.entity}. ${fmtDate(from)} to ${fmtDate(to)}. ${presentationCcy()}${unitNote()}${SCOPE.entity ? '. Entity: ' + SCOPE.entity : ''}.`}{meta ? <span className="rp-ref">{meta[2]}</span> : null}</p>
+                        </header>
+                        <ReportVisuals kind={report} from={from} to={to} rep={rep} />
+                        <div className="rp-statements">{rep.parts.map((part, i) => <Part key={i} part={part} />)}</div>
+                    </>
+                )}
             </div>
         </div>
     );

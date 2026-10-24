@@ -123,3 +123,24 @@
 .an-tiles .stat-tile, .sev-tile { box-shadow: none; }
 .an-fig figcaption .wf-key { display: flex; margin-top: 6px; }
 .an-fig figcaption .wf-key span { display: inline-flex; align-items: center; margin: 0; }
+
+/* ---------- Reports: one card, reports as tabs across the top, period and actions below them ---------- */
+.rp-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; padding: 0 10px; }
+.rp-tabs .tab { flex-shrink: 0; white-space: nowrap; padding: 13px 12px 11px; font-size: 13.5px; }
+.rp-toolbar { padding: 12px 20px; background: var(--surface-2); }
+.rp-period { gap: 8px; }
+.rp-period input[type="date"] { width: 150px; }
+.rp-period .seg { margin-left: 4px; }
+.rp-body { padding: 22px 24px 26px; }
+.rp-title { margin-bottom: 18px; }
+.rp-title h2 { margin: 0; }
+.rp-title .note { margin-top: 4px; }
+.rp-ref { display: block; margin-top: 2px; }
+.rp-statements { max-width: 980px; }
+.rp-statements h3 { margin-top: 6px; }
+@media (max-width: 700px) {
+    .rp-toolbar { padding: 12px 14px; }
+    .rp-period input[type="date"] { width: 138px; }
+    .rp-body { padding: 18px 14px 20px; }
+}
+@media print { .rp-tabs, .rp-toolbar { display: none; } .rp-statements { max-width: none; } }

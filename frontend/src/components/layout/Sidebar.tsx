@@ -49,7 +49,7 @@ function open(screen: ScreenId) {
 }
 
 /** Keeps the highlight behind the active link, sliding it there when the active link changes. */
-function useNavInk(root: ScreenId | undefined) {
+function useNavInk(root: ScreenId | undefined, collapsed: boolean) {
     const nav = useRef<HTMLElement>(null);
     const ink = useRef<HTMLSpanElement>(null);
     const place = (animate: boolean) => {
@@ -62,6 +62,14 @@ function useNavInk(root: ScreenId | undefined) {
     const placeRef = useRef(place);
     placeRef.current = place;
     useLayoutEffect(() => { placeRef.current(true); }, [root]);
+    // Collapsing or expanding moves every link: place the highlight again now and once the width has settled.
+    useLayoutEffect(() => {
+        placeRef.current(false);
+        const side = nav.current;
+        const settle = (e: TransitionEvent) => { if (e.target === side && e.propertyName === 'width') placeRef.current(false); };
+        side?.addEventListener('transitionend', settle);
+        return () => side?.removeEventListener('transitionend', settle);
+    }, [collapsed]);
     useLayoutEffect(() => {
         // Link heights change once the web font loads and when the layout reflows.
         const settle = () => placeRef.current(false);
@@ -73,17 +81,26 @@ function useNavInk(root: ScreenId | undefined) {
     return { nav, ink };
 }
 
+/* On a wide screen the sidebar can fold to its icons; the choice is kept for this browser. */
+const COLLAPSE_KEY = 'ifrs16.sideCollapsed';
+const savedCollapsed = (): boolean => { try { return localStorage.getItem(COLLAPSE_KEY) === '1'; } catch { return false; } };
+
 export function Sidebar() {
     const root = getTrail()[0]?.screen;
-    const { nav, ink } = useNavInk(root);
+    const [collapsed, setCollapsed] = useState(savedCollapsed);
+    const toggleCollapsed = () => setCollapsed(c => { try { localStorage.setItem(COLLAPSE_KEY, c ? '0' : '1'); } catch { /* storage unavailable */ } return !c; });
+    const { nav, ink } = useNavInk(root, collapsed);
     const pending = pendingApprovals().length;
     // On a phone the menu folds away behind a button; choosing a screen folds it again.
     const [menuOpen, setMenuOpen] = useState(false);
     // Administration is shown to anyone who can manage users or settings, or view the audit log.
     const adminOpen = can('admin.users') || can('admin.settings') || can('audit.view');
     return (
-        <nav className={`side${menuOpen ? ' open' : ''}`} aria-label="Main" ref={nav}>
+        <nav className={`side${menuOpen ? ' open' : ''}${collapsed ? ' collapsed' : ''}`} aria-label="Main" ref={nav}>
             <div className="brand"><div className="brand-mark" aria-hidden="true">16</div><div className="brand-text"><b>IFRS 16 Lease Manager</b><span>{currentCompany()?.name || 'Lessee and lessor accounting'}</span></div>
+                <button type="button" className="side-collapse" id="side-collapse" aria-expanded={!collapsed} aria-controls="nav-menu" aria-label={collapsed ? 'Expand the sidebar' : 'Collapse the sidebar to icons'} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} onClick={toggleCollapsed}>
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={collapsed ? 'M13 6l6 6-6 6M5 6l6 6-6 6' : 'M11 18l-6-6 6-6M19 18l-6-6 6-6'} /></svg>
+                </button>
                 <button type="button" className="nav-toggle" id="nav-toggle" aria-expanded={menuOpen} aria-controls="nav-menu" aria-label={menuOpen ? 'Close menu' : 'Open menu'} onClick={() => setMenuOpen(o => !o)}>
                     {pending ? <span className="nav-count" aria-hidden="true">{pending}</span> : null}
                     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d={menuOpen ? 'M6 6l12 12M18 6 6 18' : 'M4 7h16M4 12h16M4 17h16'} /></svg>
@@ -97,7 +114,7 @@ export function Sidebar() {
                         {g.items.map(it => {
                             const perm = it.screen === 'admin' && adminOpen ? {} : it.perm ? gate(it.perm) : {};
                             return (
-                                <button key={it.screen} className={`nav-link${root === it.screen ? ' active' : ''}`} data-screen={it.screen} onClick={() => { setMenuOpen(false); open(it.screen); }} aria-current={root === it.screen ? 'page' : undefined} {...perm}>
+                                <button key={it.screen} className={`nav-link${root === it.screen ? ' active' : ''}`} data-screen={it.screen} title={collapsed ? it.label : undefined} onClick={() => { setMenuOpen(false); open(it.screen); }} aria-current={root === it.screen ? 'page' : undefined} {...perm}>
                                     <NavIcon screen={it.screen} /><span className="nav-label">{it.label}</span>
                                     {it.screen === 'approvals' && <>{' '}<span className="nav-count" id="nav-approvals-count" hidden={!pending}>{pending || ''}</span></>}
                                 </button>

@@ -228,3 +228,35 @@
 /* Two-column list-and-detail screens (reports, bank, guidance) on narrow screens: one column that never grows past
    the screen, so wide statement tables scroll inside their own box instead of widening the page */
 @media (max-width: 1100px) { .kb { grid-template-columns: minmax(0, 1fr); } .kb > * { min-width: 0; } }
+
+/* ---------- Collapsible sidebar: on a wide screen the arrow folds it to its icons (names stay for screen readers
+   and show as tooltips) ---------- */
+.side { transition: width .22s var(--ease-out); }
+.side-collapse {
+    flex-shrink: 0; margin-left: auto; display: inline-grid; place-items: center; width: 28px; height: 28px; padding: 0;
+    border: 1px solid rgba(255,255,255,.12); border-radius: 8px; background: rgba(255,255,255,.04); color: var(--side-text);
+    cursor: pointer; transition: background-color .18s ease, color .18s ease;
+}
+.side-collapse:hover { background: rgba(255,255,255,.1); color: #fff; }
+.side-collapse:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 70%, #fff); outline-offset: 2px; }
+@media (max-width: 800px) { .side-collapse { display: none; } }
+@media (min-width: 801px) {
+    .side.collapsed { width: 72px; overflow-x: hidden; }
+    .side.collapsed .brand { flex-direction: column; gap: 12px; padding: 18px 0 10px; }
+    .side.collapsed .brand-text, .side.collapsed .side-foot { display: none; }
+    .side.collapsed .side-collapse { margin-left: 0; }
+    .side.collapsed .nav-group { padding: 4px 12px 2px; }
+    .side.collapsed .nav-group h5 { height: 1px; margin: 8px 8px 9px; padding: 0; overflow: hidden; color: transparent; background: rgba(255,255,255,.09); }
+    .side.collapsed .nav-group:first-of-type h5 { display: none; }
+    .side.collapsed .nav-link { justify-content: center; gap: 0; padding: 9px 0; }
+    .side.collapsed .nav-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    .side.collapsed .nav-link .nav-count { position: absolute; top: 2px; right: 4px; min-width: 16px; padding: 0 4px; font-size: 10px; line-height: 16px; }
+    .side.collapsed .nav-ink { left: 12px; right: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { .side { transition: none; } }
+/* Room for the collapse arrow beside the name, which stays on one line */
+@media (min-width: 801px) {
+    .side:not(.collapsed) .brand { gap: 9px; padding: 18px 12px 16px 14px; }
+    .side:not(.collapsed) .brand b { font-size: 14px; white-space: nowrap; }
+    .side-collapse { width: 26px; height: 26px; }
+}

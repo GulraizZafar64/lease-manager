@@ -20,6 +20,21 @@ import type { DocumentHit, Lease, LeaseDocument } from '../types/lease';
 
 type ImportParams = ScreenParamMap['import'];
 
+const I = {
+    upload: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12',
+    doc: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8',
+    sheet: 'M3 3h18v18H3zM3 9h18M3 15h18M9 3v18',
+    download: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3',
+    paste: 'M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2M9 2h6v4H9z',
+    sparkle: 'M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z',
+    lock: 'M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4',
+    check: 'M20 6 9 17l-5-5',
+    chevron: 'M9 18l6-6-6-6',
+};
+const Ic = ({ d, size = 16 }: { d: string; size?: number }) => (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
+);
+
 /* ======================================================================
    Contract import. The document stays in module state, so it is still
    there when the user leaves the screen and comes back.
@@ -43,7 +58,7 @@ type FieldsView =
     | { k: 'list'; fields: Record<string, ImportField>; notes: string[] }
     | { k: 'tape'; ready: number; total: number }
     | { k: 'aiBusy'; ctl: AbortController };
-type Legend = { k: 'none' } | { k: 'chips'; used: string[] } | { k: 'tape'; text: string };
+type Legend = { k: 'none' } | { k: 'chips'; used: string[] } | { k: 'tape'; cols: [column: string, key: string][] };
 type DocView = { k: 'none' } | { k: 'empty' } | { k: 'html'; html: string } | { k: 'tape'; tape: TapeView };
 type Actions = { k: 'hidden' } | { k: 'next'; seq: number; rate: string; ratePh: string } | { k: 'tape'; tape: TapeView };
 interface View {
@@ -227,7 +242,7 @@ function renderTape(v: View, tape: Tape): View {
     return {
         ...v,
         docMeta: `Sheet “${tape.sheet}”: ${leases.length} leases recognised from ${Object.keys(tape.map).length} matched columns.`,
-        legend: { k: 'tape', text: `Matched columns: ${Object.entries(tape.map).map(([k, i]) => `${tape.head[i]} → ${k}`).join(', ')}` },
+        legend: { k: 'tape', cols: Object.entries(tape.map).map(([k, i]) => [tape.head[i], k]) },
         wsNormal: true,
         doc: { k: 'tape', tape: tv },
         fields: { k: 'tape', ready, total: leases.length }, aiNotes: 0,
@@ -368,65 +383,98 @@ export function ImportPage({ params: p }: ScreenProps<'import'>) {
 
     const F = view.fields;
     const A = view.actions;
+    const loaded = view.docShown || F.k === 'reading';
     return (
         <div className="import">
             <div className="stack">
-                <div className={'drop' + (over ? ' over' : '')} id="drop" tabIndex={0} role="button" aria-label="Choose a contract file"
+                <div className={'drop' + (over ? ' over' : '') + (loaded ? ' compact' : '')} id="drop" tabIndex={0} role="button" aria-label="Choose a contract file"
                     onClick={() => fileRef.current?.click()}
                     onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileRef.current?.click(); } }}
                     onDragOver={e => { e.preventDefault(); setOver(true); }}
                     onDragLeave={() => setOver(false)}
                     onDrop={e => { e.preventDefault(); setOver(false); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0], setView); }}>
                     <input type="file" id="file" ref={fileRef} hidden accept=".pdf,.docx,.xlsx,.xls,.csv,.txt,.md,.png,.jpg,.jpeg,.webp" onChange={e => { const fl = e.currentTarget.files; if (fl && fl[0]) handleFile(fl[0], setView); }} />
-                    <strong>Drop a lease contract here or choose a file</strong>
-                    <p className="note" style={{ margin: '6px auto 0' }}>PDF, Word (.docx), Excel, CSV or text. Photos and scanned PDFs are read by AI. Files are read in your browser; only AI reading sends text to Claude.</p>
+                    <span className="drop-ic"><Ic d={I.upload} size={loaded ? 18 : 26} /></span>
+                    <div className="drop-text">
+                        <strong>{loaded ? 'Drop another file here or choose one' : 'Drop a lease contract here or choose a file'}</strong>
+                        <p className="note">{loaded ? 'PDF, Word, Excel, CSV, text or a photo.' : 'PDF, Word (.docx), Excel, CSV or text. Photos and scanned PDFs are read by AI.'}</p>
+                        {loaded ? null : <div className="drop-formats" aria-hidden="true">{['PDF', 'DOCX', 'XLSX', 'CSV', 'TXT', 'JPG / PNG'].map(t => <span key={t}>{t}</span>)}</div>}
+                        {loaded ? null : <p className="drop-private"><Ic d={I.lock} size={13} />Files are read in your browser; only AI reading sends text to Claude.</p>}
+                    </div>
+                    <span className="btn btn-sm drop-btn" aria-hidden="true">Choose file</span>
                 </div>
                 <div className="card" id="doc-card" hidden={!view.docShown}>
-                    <div className="section-head"><div><h3 id="doc-name">{view.docName}</h3><p className="note" id="doc-meta">{view.docMeta}</p></div><div className="btn-row"><button className="btn btn-ghost btn-sm" id="doc-paste" onClick={showPaste}>Paste text instead</button></div></div>
-                    <div className="pad" id="legend" style={{ paddingBottom: 0 }}>
+                    <div className="section-head imp-head">
+                        <div className="imp-file"><span className="imp-file-ic"><Ic d={view.legend.k === 'tape' ? I.sheet : I.doc} size={18} /></span><div><h3 id="doc-name">{view.docName}</h3><p className="note" id="doc-meta">{view.docMeta}</p></div></div>
+                        <div className="btn-row"><button className="btn btn-ghost btn-sm" id="doc-paste" onClick={showPaste}>Paste text instead</button></div>
+                    </div>
+                    <div className="pad imp-legend" id="legend" hidden={view.legend.k === 'none' || (view.legend.k === 'chips' && !view.legend.used.length)}>
                         {view.legend.k === 'chips' && view.legend.used.map(k => <span className="legend-chip" key={k}><i style={{ background: FIELD_COLORS[k] || '#eee' }}></i>{FIELD_LABELS[k] || k}</span>)}
-                        {view.legend.k === 'tape' && <p className="note">{view.legend.text}</p>}
+                        {view.legend.k === 'tape' && <details className="tape-cols"><summary><Ic d={I.check} size={14} />{view.legend.cols.length} columns matched<span className="note">Show</span></summary>
+                            <div className="col-chips">{view.legend.cols.map(([col, key]) => <span key={key} title={`Read as ${key}`}>{col}</span>)}</div></details>}
                     </div>
                     {view.doc.k === 'html'
                         ? <div className="doc-view" id="doc-view" ref={docRef} style={view.wsNormal ? { whiteSpace: 'normal' } : undefined} onClick={onDocClick} dangerouslySetInnerHTML={{ __html: view.doc.html }} />
-                        : <div className="doc-view" id="doc-view" ref={docRef} style={view.wsNormal ? { whiteSpace: 'normal' } : undefined} onClick={onDocClick}>
+                        : <div className={'doc-view' + (view.doc.k === 'tape' ? ' is-tape' : '')} id="doc-view" ref={docRef} style={view.wsNormal ? { whiteSpace: 'normal' } : undefined} onClick={onDocClick}>
                             {view.doc.k === 'empty' && <p className="empty">No readable text. Use “Read with AI” to read it from the page images, or paste the text.</p>}
                             {view.doc.k === 'tape' && <TapeTable tv={view.doc.tape} />}
                         </div>}
                 </div>
                 <div className="card pad" id="paste-card" hidden={!pasteShown}><label htmlFor="paste">Paste the contract text</label><textarea id="paste" rows={10} ref={pasteRef}></textarea><div className="form-actions"><button className="btn" id="paste-go" onClick={readPasted}>Read terms</button></div></div>
-                <div className="card pad"><h3>Bring in existing leases from a spreadsheet</h3><p className="note">For migrating a portfolio: one row per lease. Download the template, fill it in, then drop it above. Each row becomes a draft for review.</p><div className="btn-row" style={{ marginTop: '10px' }}><button className="btn btn-ghost" id="tpl-x" onClick={() => exportFile('xlsx', 'Lease_import_template', [{ name: 'Leases', rows: TEMPLATE_ROWS }])}>Template (.xlsx)</button><button className="btn btn-ghost" id="tpl-c" onClick={() => exportFile('csv', 'Lease_import_template', [{ name: 'Leases', rows: TEMPLATE_ROWS }])}>Template (.csv)</button><button className="btn btn-ghost" id="show-paste" onClick={showPaste}>Paste contract text</button></div></div>
+                <div className="card pad imp-sheet" id="sheet-help">
+                    <span className="imp-sheet-ic"><Ic d={I.sheet} size={20} /></span>
+                    <div className="imp-sheet-text"><h3>Bring in existing leases from a spreadsheet</h3><p className="note">For migrating a portfolio: one row per lease. Download the template, fill it in, then drop it above. Each row becomes a draft for review.</p></div>
+                    <div className="btn-row"><button className="btn btn-ghost btn-sm" id="tpl-x" onClick={() => exportFile('xlsx', 'Lease_import_template', [{ name: 'Leases', rows: TEMPLATE_ROWS }])}><Ic d={I.download} size={14} />Template (.xlsx)</button><button className="btn btn-ghost btn-sm" id="tpl-c" onClick={() => exportFile('csv', 'Lease_import_template', [{ name: 'Leases', rows: TEMPLATE_ROWS }])}><Ic d={I.download} size={14} />Template (.csv)</button><button className="btn btn-ghost btn-sm" id="show-paste" onClick={showPaste}><Ic d={I.paste} size={14} />Paste contract text</button></div>
+                </div>
             </div>
-            <div className="stack">
-                <div className="card" id="fields-card"><div className="section-head"><h3>Terms found</h3><button className="btn btn-ghost btn-sm" id="ai-read" disabled={view.aiDisabled} {...gate('ai.use')} onClick={() => aiExtract(setView)}>Read with AI</button></div>
+            <div className="stack imp-side">
+                <div className="card" id="fields-card"><div className="section-head"><h3>{F.k === 'tape' ? 'Rows found' : 'Terms found'}{F.k === 'list' && Object.keys(F.fields).length ? <span className="imp-count">{Object.keys(F.fields).length}</span> : null}</h3><button className="btn btn-ghost btn-sm" id="ai-read" disabled={view.aiDisabled} {...gate('ai.use')} onClick={() => aiExtract(setView)}><Ic d={I.sparkle} size={14} />Read with AI</button></div>
                     <div className="pad" id="fields" ref={fieldsRef}>
                         {Array.from({ length: view.aiNotes }, (_, i) => <p className="note" key={'n' + i}>AI is not available in this view. Open the page in Claude to use it.</p>)}
-                        {F.k === 'intro' && <p className="note">Terms appear here with the sentence they came from. Select a term to jump to it in the document.</p>}
-                        {F.k === 'reading' && <p className="note"><span className="spinner"></span> Reading the file…</p>}
-                        {F.k === 'error' && <p className="note">{F.msg}</p>}
+                        {F.k === 'intro' && <><p className="note">Terms appear here with the sentence they came from. Select a term to jump to it in the document.</p>
+                            <ol className="imp-steps">
+                                <li><b>Add the contract</b><span>Drop a file, or paste its text. A spreadsheet of many leases works too.</span></li>
+                                <li><b>Check the terms</b><span>Each term shows the words it was read from. “Read with AI” reads scans and unusual wording.</span></li>
+                                <li><b>Open in the lease form</b><span>Nothing is saved until you submit the form.</span></li>
+                            </ol></>}
+                        {F.k === 'reading' && <p className="note imp-wait"><span className="spinner"></span> Reading the file…</p>}
+                        {F.k === 'error' && <div className="banner bad" style={{ margin: 0 }}><div><p>{F.msg}</p></div></div>}
                         {F.k === 'nothing' && <p className="note">Nothing found yet.</p>}
-                        {F.k === 'aiBusy' && <p className="note"><span className="spinner"></span> Claude is reading the contract. This can take up to a minute. <button className="link" id="ai-stop" onClick={() => F.ctl.abort()}>Stop</button></p>}
-                        {F.k === 'tape' && <p>{F.ready} of {F.total} rows are ready. Rows with problems are skipped; fix them in the sheet and import again.</p>}
+                        {F.k === 'aiBusy' && <p className="note imp-wait"><span className="spinner"></span> Claude is reading the contract. This can take up to a minute. <button className="link" id="ai-stop" onClick={() => F.ctl.abort()}>Stop</button></p>}
+                        {F.k === 'tape' && <div className="tape-sum">
+                            <div className="tape-sum-n"><b>{F.ready}</b><span>of {F.total} rows ready</span></div>
+                            <div className="tape-meter" role="img" aria-label={`${F.ready} of ${F.total} rows ready`}><span style={{ width: `${F.total ? (F.ready / F.total) * 100 : 0}%` }} /></div>
+                            <p>{F.ready} of {F.total} rows are ready. Rows with problems are skipped; fix them in the sheet and import again.</p>
+                        </div>}
                         {F.k === 'list' && <FieldList fields={F.fields} notes={F.notes} onJump={focusHit} />}
                     </div>
                 </div>
-                <div className="card pad" id="actions" hidden={A.k === 'hidden'}>
+                <div className="card pad aligned" id="actions" hidden={A.k === 'hidden'}>
                     {A.k === 'next' && <>
-                        <h3>Next step</h3><p className="note" style={{ marginBottom: '10px' }}>Review the terms, then open them in the lease form. Nothing is saved until you submit the form.</p>
+                        <h3>Next step</h3><p className="note" style={{ marginBottom: '12px' }}>Review the terms, then open them in the lease form. Nothing is saved until you submit the form.</p>
                         <div className="row2"><div className="fg"><label htmlFor="imp-role">We are the</label><select id="imp-role" key={'r' + A.seq} ref={roleRef} defaultValue="lessee"><option value="lessee">Lessee</option><option value="lessor">Lessor</option></select></div><div className="fg"><label htmlFor="imp-rate">Discount rate % (if not in the contract)</label><input type="number" step="any" id="imp-rate" key={'t' + A.seq} ref={rateRef} defaultValue={A.rate} placeholder={A.ratePh} /></div></div>
-                        <div className="btn-row">
+                        <div className="btn-row imp-actions">
                             {p.attachTo && <button className="btn" id="imp-attach" onClick={() => attach(p)}>Attach to {p.attachTo}</button>}
-                            <button className={'btn ' + (p.attachTo ? 'btn-ghost' : '')} id="imp-create" onClick={() => { const l = leaseFromImport(roleRef.current?.value || 'lessee', rateRef.current?.value || ''); go('entry', { mode: 'new', prefill: l }, { reset: true }); }}>Open in lease form</button>
+                            <button className={'btn ' + (p.attachTo ? 'btn-ghost' : '')} id="imp-create" onClick={() => { const l = leaseFromImport(roleRef.current?.value || 'lessee', rateRef.current?.value || ''); go('entry', { mode: 'new', prefill: l }, { reset: true }); }}>Open in lease form<Ic d={I.chevron} size={15} /></button>
                             <button className="btn btn-ghost" id="imp-ask" {...gate('ai.use')} onClick={() => go('ai', { contract: { name: ImportState.name, text: ImportState.text.slice(0, 60000) } }, { reset: true })}>Ask AI about this contract</button>
                         </div>
                     </>}
-                    {A.k === 'tape' && <>
-                        <h3>Import</h3><p className="note" style={{ marginBottom: '10px' }}>Ready rows are added as {SETTINGS.requireApproval ? 'leases awaiting approval' : 'active leases'}.</p><button className="btn" id="tape-go" onClick={() => importTape(A.tape)}>Import {A.tape.leases.filter((_, i) => !A.tape.issues[i].length).length} leases</button>
-                    </>}
+                    {A.k === 'tape' && <TapeImport tv={A.tape} />}
                 </div>
             </div>
         </div>
     );
+}
+
+/** Import button for a spreadsheet of leases; shows that it is working, and runs once. */
+function TapeImport({ tv }: { tv: TapeView }) {
+    const [busy, setBusy] = useState(false);
+    const ready = tv.leases.filter((_, i) => !tv.issues[i].length).length;
+    return <>
+        <h3>Import</h3><p className="note" style={{ marginBottom: '12px' }}>Ready rows are added as {SETTINGS.requireApproval ? 'leases awaiting approval' : 'active leases'}.</p>
+        <button className="btn imp-go" id="tape-go" disabled={busy || !ready} onClick={async () => { setBusy(true); try { await importTape(tv); } finally { setBusy(false); } }}>{busy ? <><span className="spinner" aria-hidden="true" />Importing…</> : `Import ${ready} leases`}</button>
+        {ready < tv.leases.length ? <p className="note" style={{ marginTop: '8px' }}>{tv.leases.length - ready} row{tv.leases.length - ready === 1 ? '' : 's'} with problems will be skipped.</p> : null}
+    </>;
 }
 
 async function attach(p: ImportParams) {
@@ -439,7 +487,9 @@ async function importTape(tv: TapeView) {
     const { leases, issues } = tv;
     let n = 0;
     for (let i = 0; i < leases.length; i++) { if (issues[i].length) continue; const l = leases[i]; l.status = SETTINGS.requireApproval ? 'pending' : 'active'; logHistory(l, `Imported from ${ImportState.name}${SETTINGS.requireApproval ? ' and submitted for approval' : ''}`); if (await Store.save(l)) n++; }
-    toast(`${n} leases imported`); ImportState.text = ''; go('register', {}, { reset: true });
+    toast(`${n} leases imported`);
+    if (!n) return; // nothing saved: stay, so the sheet can be imported again
+    ImportState.text = ''; go('register', {}, { reset: true });
 }
 
 function FieldList({ fields, notes, onJump }: { fields: Record<string, ImportField>; notes: string[]; onJump: (k: string) => void }) {
@@ -448,8 +498,10 @@ function FieldList({ fields, notes, onJump }: { fields: Record<string, ImportFie
         {order.length ? order.map(k => {
             const f = fields[k];
             return (
-                <div className="xf" key={k}><strong>{FIELD_LABELS[k]}</strong><span>{`${fmtField(k, f.value)} `}{f.source === 'ai' && <span className="badge badge-info">AI</span>}{f.derived && <>{' '}<span className="note">(from dates)</span></>}</span>
-                    <div className="src">{f.snippet ? `“${f.snippet.slice(0, 140)}${f.snippet.length > 140 ? '…' : ''}” ` : ''}{f.start != null && f.start >= 0 && <button className="link" data-jump={k} onClick={() => onJump(k)}>Show</button>}</div></div>
+                <div className="xf" key={k}>
+                    <div className="xf-head"><span className="xf-l"><i style={{ background: FIELD_COLORS[k] || 'var(--line-2)' }} />{FIELD_LABELS[k]}</span><span className="xf-v">{fmtField(k, f.value)}{f.source === 'ai' && <span className="badge badge-info">AI</span>}{f.derived && <span className="note">(from dates)</span>}</span></div>
+                    {f.snippet || (f.start != null && f.start >= 0) ? <div className="src">{f.snippet ? <q>{f.snippet.slice(0, 140)}{f.snippet.length > 140 ? '…' : ''}</q> : null}{f.start != null && f.start >= 0 && <button className="link" data-jump={k} onClick={() => onJump(k)}>Show in document</button>}</div> : null}
+                </div>
             );
         }) : <p className="note">No terms recognised. Try “Read with AI”.</p>}
         {notes.length > 0 && <ul className="warn-list" style={{ marginTop: '12px' }}>{notes.map((n, i) => <li className="info" key={i}>{n}</li>)}</ul>}
@@ -459,8 +511,8 @@ function FieldList({ fields, notes, onJump }: { fields: Record<string, ImportFie
 function TapeTable({ tv }: { tv: TapeView }) {
     const { leases, issues, liab } = tv;
     return (
-        <div className="scroll-x"><table><thead><tr><th>Lease</th><th>Description</th><th>Commences</th><th className="num">Months</th><th className="num">Payment</th><th className="num">Rate %</th><th className="num">Liability</th><th>Check</th></tr></thead><tbody>
-            {leases.map((l, i) => <tr key={i}><td>{l.id}</td><td>{l.name}</td><td>{fmtDate(l.terms.commencement)}</td><td className="num">{l.terms.termMonths}</td><td className="num">{fmtNum(l.terms.payment)}</td><td className="num">{l.terms.discountRate || '—'}</td><td className="num">{issues[i].length ? '—' : liab[i]}</td><td>{issues[i].length ? <span className="badge badge-bad">Missing {issues[i].join(', ')}</span> : <span className="badge badge-ok">Ready</span>}</td></tr>)}
+        <div className="scroll-x"><table><thead><tr><th>Lease</th><th>Check</th><th>Description</th><th>Commences</th><th className="num">Months</th><th className="num">Payment</th><th className="num">Rate %</th><th className="num">Liability</th></tr></thead><tbody>
+            {leases.map((l, i) => <tr key={i}><td><b>{l.id}</b></td><td>{issues[i].length ? <span className="badge badge-bad">{issues[i].includes('ID already exists') && issues[i].length === 1 ? 'ID already exists' : `Missing ${issues[i].join(', ')}`}</span> : <span className="badge badge-ok">Ready</span>}</td><td className="tape-desc">{l.name}</td><td>{fmtDate(l.terms.commencement)}</td><td className="num">{l.terms.termMonths || '—'}</td><td className="num">{fmtNum(l.terms.payment)}</td><td className="num">{l.terms.discountRate || '—'}</td><td className="num">{issues[i].length ? '—' : liab[i]}</td></tr>)}
         </tbody></table></div>
     );
 }

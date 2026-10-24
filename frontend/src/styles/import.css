@@ -1,0 +1,117 @@
+/* Import a contract: upload area, the document, terms found and the import summary. */
+
+/* Columns shrink to the screen; a wide spreadsheet scrolls inside its card instead of widening the page */
+.import { gap: 20px; }
+.import > *, .import .stack > * { min-width: 0; }
+.import .stack { grid-template-columns: minmax(0, 1fr); }
+
+/* ---------- Upload area ---------- */
+.drop {
+    display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 32px 24px;
+    border: 2px dashed var(--line-2); border-radius: 14px; background: var(--surface);
+    transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease;
+}
+.drop:hover, .drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent-soft) 60%, var(--surface)); }
+.drop.over { box-shadow: 0 0 0 4px var(--accent-soft); }
+.drop:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+.drop-ic { width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+.drop-text { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+.drop-text strong { font-size: 15px; color: var(--strong); }
+.drop-text .note { margin: 0; max-width: 56ch; }
+.drop-formats { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 8px; }
+.drop-formats span { padding: 2px 8px; border-radius: 6px; background: var(--surface-3); color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: .03em; }
+.drop-private { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 12px; color: var(--muted); }
+.drop-btn { margin-top: 2px; pointer-events: none; }
+
+/* Once a file is in, the upload area becomes one compact row */
+.drop.compact { flex-direction: row; justify-content: flex-start; text-align: left; gap: 12px; padding: 12px 14px; border-width: 1.5px; border-radius: 12px; }
+.drop.compact .drop-ic { width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0; }
+.drop.compact .drop-text { align-items: flex-start; flex: 1; gap: 1px; }
+.drop.compact .drop-text strong { font-size: 13.5px; }
+.drop.compact .drop-btn { margin: 0; flex-shrink: 0; }
+
+/* ---------- The document ---------- */
+.imp-head { align-items: center; }
+.imp-file { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.imp-file > div { min-width: 0; }
+.imp-file h3 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imp-file-ic { flex-shrink: 0; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--info-bg); color: var(--info); }
+.imp-legend { padding: 12px 20px 4px; border-bottom: 1px solid var(--line); }
+.legend-chip { padding: 2px 9px 2px 7px; margin: 0 6px 8px 0; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2); }
+.legend-chip i { border-radius: 50%; }
+.doc-view { padding: 18px 22px; }
+.doc-view.is-tape { padding: 0; max-height: none; }
+.doc-view.is-tape table { font-size: 13px; }
+.doc-view.is-tape th:first-child, .doc-view.is-tape td:first-child { padding-left: 20px; }
+.doc-view.is-tape th:last-child, .doc-view.is-tape td:last-child { padding-right: 20px; }
+
+.tape-cols { margin-bottom: 8px; }
+.tape-cols summary {
+    display: inline-flex; align-items: center; gap: 6px; cursor: pointer; list-style: none;
+    font-size: 13px; font-weight: 500; color: var(--ok);
+}
+.tape-cols summary::-webkit-details-marker { display: none; }
+.tape-cols summary .note { margin-left: 4px; color: var(--link); text-decoration: underline; text-underline-offset: 2px; }
+.tape-cols[open] summary .note { font-size: 0; }
+.tape-cols[open] summary .note::after { content: 'Hide'; font-size: 12.5px; }
+.col-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.col-chips span { padding: 2px 9px; border-radius: 999px; background: var(--ok-bg); color: var(--ok); font-size: 12px; }
+
+/* ---------- Spreadsheet help ---------- */
+.imp-sheet { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; align-items: start; }
+.imp-sheet-ic { grid-row: span 2; width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; background: var(--ok-bg); color: var(--ok); }
+.imp-sheet-text h3 { margin-bottom: 4px; }
+.imp-sheet .btn-row { grid-column: 2; margin-top: 8px; }
+
+/* ---------- Terms found ---------- */
+#fields-card .section-head h3 { display: inline-flex; align-items: center; gap: 8px; }
+.imp-count { min-width: 22px; padding: 0 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 600; text-align: center; line-height: 20px; }
+.imp-wait { display: flex; align-items: center; gap: 8px; }
+.imp-steps { list-style: none; counter-reset: s; display: grid; gap: 14px; margin-top: 16px; }
+.imp-steps li { counter-increment: s; display: grid; grid-template-columns: 28px minmax(0, 1fr); column-gap: 12px; }
+.imp-steps li::before {
+    content: counter(s); grid-row: span 2; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+    background: var(--accent-soft); color: var(--accent); font-size: 12.5px; font-weight: 600;
+}
+.imp-steps b { color: var(--strong); font-size: 13.5px; font-weight: 600; }
+.imp-steps span { font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+
+.xf { display: block; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.xf:first-child { padding-top: 2px; }
+.xf:last-of-type { border-bottom: none; }
+.xf-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.xf-l { display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0; font-size: 12.5px; color: var(--muted); }
+.xf-l i { width: 9px; height: 9px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .12); }
+.xf-v { display: inline-flex; align-items: baseline; justify-content: flex-end; flex-wrap: wrap; gap: 6px; min-width: 0; text-align: right; font-weight: 600; color: var(--strong); }
+.xf .src { margin-top: 5px; padding: 4px 9px; border-left: 2px solid var(--line-2); border-radius: 0 6px 6px 0; background: var(--surface-2); font-size: 12px; color: var(--muted); line-height: 1.45; }
+.xf .src q { font-style: italic; }
+.xf .src button { display: inline-block; margin-left: 6px; font-size: 12px; }
+
+/* ---------- Spreadsheet summary and import ---------- */
+.tape-sum-n { display: flex; align-items: baseline; gap: 8px; }
+.tape-sum-n b { font-size: 30px; line-height: 1; font-weight: 600; letter-spacing: -.02em; color: var(--strong); }
+.tape-sum-n span { color: var(--muted); font-size: 13px; }
+.tape-meter { height: 8px; margin: 12px 0; border-radius: 4px; background: var(--bad-bg); overflow: hidden; }
+.tape-meter span { display: block; height: 100%; border-radius: 4px; background: var(--ok); }
+.tape-sum p { font-size: 13px; color: var(--muted); }
+.imp-go { width: 100%; justify-content: center; min-height: 40px; }
+.imp-actions { margin-top: 4px; }
+
+/* A long list of terms scrolls inside its card, so the next step stays in reach */
+#fields:has(.xf) { max-height: min(46vh, 520px); overflow-y: auto; scrollbar-width: thin; }
+.tape-desc { white-space: normal; min-width: 140px; max-width: 220px; }
+
+/* One column: the action follows the document, and the spreadsheet help comes last */
+@media (max-width: 1100px) {
+    .import { display: flex; flex-direction: column; align-items: stretch; }
+    .import .stack { display: contents; }
+    #drop { order: 1; } #doc-card { order: 2; } #paste-card { order: 3; } #fields-card { order: 4; } #actions { order: 5; } #sheet-help { order: 6; }
+}
+@media (max-width: 640px) {
+    .drop { padding: 24px 16px; }
+    .drop.compact .drop-btn { display: none; }
+    .imp-sheet { grid-template-columns: minmax(0, 1fr); }
+    .imp-sheet-ic { display: none; }
+    .imp-sheet .btn-row { grid-column: 1; }
+}
+@media (prefers-reduced-motion: reduce) { .drop { transition: none; } }

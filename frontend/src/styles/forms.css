@@ -1,0 +1,97 @@
+/* Multi-step forms: the step indicator, aligned field rows, field errors and the action bar. */
+
+/* ---------- Steps ---------- */
+.stepper-wrap { padding: 18px 20px 14px; border-bottom: 1px solid var(--line); }
+.stepper { display: flex; list-style: none; margin: 0; padding: 0; }
+.step { position: relative; flex: 1 1 0; min-width: 0; }
+/* The line joining a step to the one before it; coloured once the step is reached */
+.step + .step::before {
+    content: ''; position: absolute; top: 14px; left: calc(-50% + 20px); right: calc(50% + 20px); height: 2px; border-radius: 2px;
+    background: var(--line-2); transition: background-color .25s ease;
+}
+.step.is-reached + .step.is-reached::before { background: var(--accent); }
+.step button {
+    display: flex; flex-direction: column; align-items: center; gap: 7px; width: 100%; padding: 0 4px;
+    border: none; background: none; font: inherit; color: var(--muted); cursor: pointer;
+}
+.step button:focus-visible { outline: none; }
+.step button:focus-visible .step-n { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
+.step-n {
+    width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; flex-shrink: 0;
+    border: 2px solid var(--line-2); background: var(--surface); color: var(--muted); font-size: 12.5px; font-weight: 600;
+    transition: background-color .2s ease, border-color .2s ease, color .2s ease, box-shadow .2s ease;
+}
+.step-l { font-size: 12px; line-height: 1.3; text-align: center; overflow-wrap: anywhere; }
+.step button:hover .step-n { border-color: var(--accent); }
+.step button:hover .step-l { color: var(--strong); }
+.step-done .step-n { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.step-current .step-n { border-color: var(--accent); background: var(--accent); color: #fff; box-shadow: 0 0 0 4px var(--accent-soft); }
+.step-error .step-n { border-color: var(--bad); background: var(--bad-bg); color: var(--bad); }
+.step-error.is-current .step-n { box-shadow: 0 0 0 4px var(--bad-bg); }
+.step-current .step-l, .step-error.is-current .step-l { color: var(--strong); font-weight: 600; }
+.step-error .step-l { color: var(--bad); }
+.stepper-meta { display: none; margin-top: 10px; font-size: 12.5px; color: var(--muted); }
+.stepper-meta b { margin-left: 6px; color: var(--strong); font-weight: 600; }
+.lease-form-card { scroll-margin-top: calc(var(--topbar-h) + 12px); }
+
+/* ---------- Aligned rows: labels, controls, messages and hints line up across each row ---------- */
+.aligned .row2, .aligned .row3, .aligned .row4 { row-gap: 0; align-items: start; }
+/* At most three (or four) columns; fewer on narrow screens; a field alone keeps its column width */
+.aligned .row3 { grid-template-columns: repeat(auto-fill, minmax(max(190px, calc((100% - 28px) / 3)), 1fr)); }
+.aligned .row4 { grid-template-columns: repeat(auto-fill, minmax(max(150px, calc((100% - 42px) / 4)), 1fr)); }
+.aligned :is(.row2, .row3, .row4) > .fg { display: grid; grid-row: span 4; grid-template-rows: subgrid; align-content: start; }
+.aligned :is(.row2, .row3, .row4) > .fg > label:not(.check) { grid-row: 1; align-self: end; }
+.aligned :is(.row2, .row3, .row4) > .fg > :is(input, select, textarea, .check) { grid-row: 2; align-self: start; }
+.aligned :is(.row2, .row3, .row4) > .fg > .field-error { grid-row: 3; }
+.aligned :is(.row2, .row3, .row4) > .fg > .hint { grid-row: 4; }
+/* A checkbox box sits in the label and control rows, bottom-aligned with the inputs: a two-line box fits there,
+   so it never pushes its neighbours' messages and help text down */
+.aligned :is(.row2, .row3, .row4) > .fg-check > .check { grid-row: 1 / span 2; align-self: end; }
+.aligned label { line-height: 1.35; }
+.aligned input:not([type="checkbox"]):not([type="radio"]), .aligned select { min-height: 38px; border-radius: 8px; }
+.aligned textarea { border-radius: 8px; }
+.aligned .hint { line-height: 1.45; }
+.aligned fieldset { border-radius: var(--r); padding: 12px 16px 2px; }
+
+/* A checkbox in a row sits where the inputs are, as a tile the same height */
+.check-tile {
+    margin: 0; min-height: 38px; padding: 8px 11px; align-items: flex-start;
+    border: 1px solid var(--line-2); border-radius: 8px; background: var(--surface); line-height: 1.4;
+    transition: border-color .15s ease, background-color .15s ease;
+}
+.check-tile input { margin-top: 2px; flex-shrink: 0; }
+.check-tile:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line-2)); }
+.check-tile:has(input:checked) { border-color: color-mix(in srgb, var(--accent) 55%, var(--line-2)); background: var(--accent-soft); }
+.check-tile:has(input:disabled) { opacity: .65; cursor: not-allowed; }
+.check-tile:has(input:focus-visible) { box-shadow: 0 0 0 3px var(--accent-soft); border-color: var(--accent); }
+
+/* ---------- Errors ---------- */
+.aligned [aria-invalid="true"] { border-color: var(--bad); background: color-mix(in srgb, var(--bad-bg) 45%, var(--surface)); }
+.aligned [aria-invalid="true"]:focus { border-color: var(--bad); box-shadow: 0 0 0 3px var(--bad-bg); }
+.field-error { display: flex; align-items: flex-start; gap: 5px; margin-top: 5px; font-size: 12.5px; line-height: 1.35; color: var(--bad); }
+.field-error svg { flex-shrink: 0; margin-top: 1px; }
+.form-alert {
+    display: flex; align-items: center; gap: 8px; margin-top: 4px; padding: 9px 12px; border-radius: 8px;
+    border: 1px solid color-mix(in srgb, var(--bad) 30%, var(--line)); background: var(--bad-bg); color: var(--bad); font-size: 13px; font-weight: 500;
+}
+
+/* ---------- Actions: Cancel on the left; draft, Back and Next (or the final action) on the right ---------- */
+.step-actions { justify-content: flex-start; align-items: center; }
+.step-actions-gap { flex: 1 1 auto; }
+.step-actions .btn { min-height: 36px; }
+.step-actions #f-next, .step-actions #f-save { min-width: 112px; justify-content: center; }
+.btn .spinner { width: 13px; height: 13px; border-width: 2px; border-color: rgba(255, 255, 255, .35); border-top-color: #fff; }
+.btn-ghost .spinner { border-color: var(--line-2); border-top-color: var(--accent); }
+
+@media (max-width: 640px) {
+    .stepper-wrap { padding: 14px 16px 12px; }
+    .step-l { display: none; }
+    .step + .step::before { left: calc(-50% + 17px); right: calc(50% + 17px); }
+    .step-n { width: 26px; height: 26px; font-size: 11.5px; }
+    .stepper-meta { display: block; }
+    .step-actions-gap { display: none; }
+    .step-actions #f-cancel { order: 5; }
+    .step-actions .btn { flex: 1 1 auto; justify-content: center; }
+    .step-actions #f-next, .step-actions #f-save { flex-basis: 100%; order: -1; }
+}
+@media (prefers-reduced-motion: reduce) { .step + .step::before, .step-n, .check-tile { transition: none; } }

@@ -11,7 +11,7 @@ import { SCENARIOS, cashForecast, findExceptions, rateSensitivity, runScenario, 
 import { aiErr, getSample, leaseContext } from '../domain/ai';
 import { go, setParams } from '../domain/nav';
 import { useAppState } from '../hooks/useAppState';
-import { ChartCanvas, PALETTE, chartOpts } from '../components/common/ChartCanvas';
+import { BAR, ChartCanvas, MAX_SERIES, baseOptions, foldOther, pointer, vizTheme } from '../components/common/ChartCanvas';
 import { exportMenu } from '../components/common/ExportMenu';
 import { CommitInput } from '../components/ops/CommitInput';
 import { cap, fmtNum, sum, unitNote } from '../utils/format';
@@ -25,23 +25,33 @@ function Note() {
     return <p className="note" style={{ marginBottom: '12px' }}>{`${presentationCcy()}${unitNote()}, translated at rates in Administration. ${SCOPE.entity ? 'Entity: ' + SCOPE.entity + '.' : 'All entities you can access.'}`}</p>;
 }
 
+/** Payments by asset class below the line (largest classes, the rest as "Other") and receipts above it, stacked by month. */
+function forecastConfig(b: ReturnType<typeof cashForecast>): ChartConfiguration {
+    const t = vizTheme(), totals: Record<string, number> = {};
+    b.forEach(x => Object.entries(x.byClass).forEach(([k, v]) => { totals[k] = (totals[k] || 0) + v; }));
+    const { keys, other } = foldOther(totals, MAX_SERIES - 2);
+    const seg = { ...BAR, maxBarThickness: 18, borderRadius: 0, borderColor: t.surface, borderWidth: 1, stack: 'o' };
+    const datasets = keys.map((k, i) => ({ ...seg, label: ASSET_CLASSES[k] || k, data: b.map(x => -(x.byClass[k] || 0)), backgroundColor: t.series[i] }));
+    if (other.length) datasets.push({ ...seg, label: 'Other classes', data: b.map(x => -sum(other, k => x.byClass[k] || 0)), backgroundColor: t.series[keys.length] });
+    if (b.some(x => x.inn)) datasets.push({ ...seg, label: 'Receipts', data: b.map(x => x.inn), backgroundColor: t.series[MAX_SERIES - 1] });
+    const labels = b.map(x => x.label);
+    return { type: 'bar', data: { labels, datasets }, options: baseOptions(t, { stacked: true, legend: true, abs: true }) } as unknown as ChartConfiguration;
+}
+
 function Forecast({ p }: { p: P }) {
     const version = useAppState();
     const months = p.months || 24;
     const b = useMemo(() => cashForecast(months),
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [months, version]);
-    const config = useMemo(() => {
-        const keys = [...new Set(b.flatMap(x => Object.keys(x.byClass)))];
-        const cfg: ChartConfiguration<'bar'> = { type: 'bar', data: { labels: b.map(x => x.label), datasets: keys.map((k, i) => ({ label: ASSET_CLASSES[k] || k, data: b.map(x => -(x.byClass[k] || 0)), backgroundColor: PALETTE[i % PALETTE.length], stack: 'o' })).concat([{ label: 'Receipts', data: b.map(x => x.inn), backgroundColor: '#4b7f2a', stack: 'o' }]) }, options: chartOpts({ stacked: true }) };
-        return cfg as unknown as ChartConfiguration;
-    }, [b]);
+    const config = useMemo(() => forecastConfig(b), [b]);
     let c = 0;
     return (
         <>
             <Note />
             <div className="btn-row" style={{ marginBottom: '10px' }}><div className="seg">{[12, 24, 60].map(m => <button key={m} data-m={m} aria-pressed={months === m} onClick={() => setParams<'analytics'>({ months: m })}>{m} months</button>)}</div><button className="btn btn-ghost btn-sm" id="fc-exp" onClick={e => exportMenu(e.currentTarget, () => [{ name: 'Cash forecast', rows: [['Month', 'Payments', 'Receipts', 'Net'], ...b.map(x => [x.label, x.out, x.inn, x.inn - x.out])] }], 'Lease_cash_forecast', 'Lease cash-flow forecast')}>Export</button></div>
-            <div className="chart-box" style={{ height: '300px' }}><ChartCanvas id="fc-chart" config={config} /></div>
+            <p className="note" style={{ marginBottom: '6px' }}>Payments by asset class are shown below the line, receipts above it.</p>
+            <div className="chart-box" style={{ height: '300px' }}><ChartCanvas id="fc-chart" config={config} label="Lease payments by asset class and lease receipts, by month" /></div>
             <div className="scroll-x" style={{ marginTop: '14px', maxHeight: '40vh' }}><table><thead><tr><th>Month</th><th className="num">Lease payments</th><th className="num">Lease receipts</th><th className="num">Net</th><th className="num">Cumulative net</th></tr></thead><tbody>{b.map(x => { c += x.inn - x.out; return <tr key={x.start}><td>{x.label}</td><td className="num">{fmtNum(x.out)}</td><td className="num">{fmtNum(x.inn)}</td><td className="num">{fmtNum(x.inn - x.out)}</td><td className="num">{fmtNum(c)}</td></tr>; })}</tbody>
                 <tfoot><tr><td>Total</td><td className="num">{fmtNum(sum(b, x => x.out))}</td><td className="num">{fmtNum(sum(b, x => x.inn))}</td><td className="num">{fmtNum(sum(b, x => x.inn - x.out))}</td><td></td></tr></tfoot></table></div>
             <p className="note" style={{ marginTop: '8px' }}>Contractual cash flows of approved leases, including exempt leases, extension periods only where reasonably certain, and purchase options reasonably certain. Variable payments are not forecast.</p>
@@ -65,23 +75,55 @@ function Scenario({ p }: { p: P }) {
     );
 }
 
+/** Change in present value at each rate shift: decreases and increases in two opposing hues, the base at zero. */
+function sensitivityConfig(s: { bp: number; pv: number }[], base: number): ChartConfiguration {
+    const t = vizTheme(), ch = s.map(x => x.pv - base);
+    return {
+        type: 'bar',
+        data: { labels: s.map(x => `${x.bp > 0 ? '+' : ''}${x.bp} bps`), datasets: [{ label: 'Change in present value', data: ch, backgroundColor: ch.map(v => v < 0 ? t.series[2] : t.series[1]), ...BAR, borderRadius: 4, borderSkipped: false }] },
+        options: baseOptions(t),
+    } as unknown as ChartConfiguration;
+}
+
 function Sensitivity() {
-    const s = rateSensitivity([-300, -200, -100, -50, 0, 50, 100, 200, 300]), base = (s.find(x => x.bp === 0) || { pv: 0 }).pv;
+    const version = useAppState();
+    const s = useMemo(() => rateSensitivity([-300, -200, -100, -50, 0, 50, 100, 200, 300]), [version]), base = (s.find(x => x.bp === 0) || { pv: 0 }).pv; // eslint-disable-line react-hooks/exhaustive-deps
+    const config = useMemo(() => sensitivityConfig(s, base), [s, base]);
     return (
         <>
             <Note />
             <p style={{ marginBottom: '10px' }}>Present value of remaining lessee payments at each lease’s rate shifted by the amounts below. IFRS 16 does not remeasure recognised leases for market rate changes (except floating-rate payments); use this for renewals, new leases, covenant headroom and valuation.</p>
-            <table className="stmt" style={{ maxWidth: '620px' }}><thead><tr><th>Rate shift</th><th className="num">Present value</th><th className="num">Change</th><th className="num">%</th></tr></thead><tbody>{s.map(x => <tr key={x.bp} className={x.bp === 0 ? 'sub' : ''}><td>{`${x.bp > 0 ? '+' : ''}${x.bp} bps`}</td><td className="num">{fmtNum(x.pv)}</td><td className="num">{fmtNum(x.pv - base)}</td><td className="num">{base ? ((x.pv / base - 1) * 100).toFixed(2) + '%' : '—'}</td></tr>)}</tbody></table>
+            <div className="an-split">
+            {base ? <figure className="an-fig"><figcaption>Change in present value against today’s rates</figcaption><div className="chart-box" style={{ height: '260px' }}><ChartCanvas id="sens-chart" config={config} label="Change in present value at each rate shift" /></div></figure> : null}
+            <div className="scroll-x"><table className="stmt" style={{ maxWidth: '620px' }}><thead><tr><th>Rate shift</th><th className="num">Present value</th><th className="num">Change</th><th className="num">%</th></tr></thead><tbody>{s.map(x => <tr key={x.bp} className={x.bp === 0 ? 'sub' : ''}><td>{`${x.bp > 0 ? '+' : ''}${x.bp} bps`}</td><td className="num">{fmtNum(x.pv)}</td><td className="num">{fmtNum(x.pv - base)}</td><td className="num">{base ? ((x.pv / base - 1) * 100).toFixed(2) + '%' : '—'}</td></tr>)}</tbody></table></div>
+            </div>
         </>
     );
 }
 
+/** Liability by asset class at each year-end, stacked: how the balance runs off if no new leases are added. */
+function runoffConfig(m: ReturnType<typeof runoffMatrix>): ChartConfiguration {
+    const t = vizTheme(), totals = Object.fromEntries(Object.entries(m.rows).map(([k, v]) => [k, v[0] || Math.max(...v)]));
+    const { keys, other } = foldOther(totals);
+    const seg = { ...BAR, maxBarThickness: 40, borderRadius: 0, borderColor: t.surface, borderWidth: 1, stack: 'r' };
+    const datasets = keys.map((k, i) => ({ ...seg, label: ASSET_CLASSES[k] || k, data: m.rows[k], backgroundColor: t.series[i] }));
+    if (other.length) datasets.push({ ...seg, label: 'Other classes', data: m.years.map((_, i) => sum(other, k => m.rows[k][i])), backgroundColor: t.series[keys.length] });
+    return {
+        type: 'bar', data: { labels: m.years.map(y => y.label), datasets },
+        options: { ...baseOptions(t, { stacked: true, legend: true }), onClick: (_e: unknown, els: { datasetIndex: number }[]) => { const k = els.length ? keys[els[0].datasetIndex] : null; if (k) go('register', { preset: 'class:' + k }); }, onHover: pointer },
+    } as unknown as ChartConfiguration;
+}
+
 function Runoff() {
-    const m = runoffMatrix(), max = Math.max(1, ...Object.values(m.rows).flat());
+    const version = useAppState();
+    const m = useMemo(runoffMatrix, [version]), max = Math.max(1, ...Object.values(m.rows).flat());
+    const config = useMemo(() => runoffConfig(m), [m]);
     return (
         <>
             <Note />
-            <p style={{ marginBottom: '10px' }}>Lease liability by asset class at each financial year-end. Darker cells hold more liability. Select a cell to open those leases.</p><div className="scroll-x"><table><thead><tr><th>Asset class</th>{m.years.map(y => <th key={y.end} className="num">{y.label}</th>)}</tr></thead><tbody>
+            <p style={{ marginBottom: '10px' }}>Lease liability by asset class at each financial year-end, if no leases are added or changed. Select a class in the chart, or a cell in the table, to open those leases.</p>
+            {Object.keys(m.rows).length ? <div className="chart-box" style={{ height: '280px', marginBottom: '16px' }}><ChartCanvas id="ro-chart" config={config} label="Lease liability by asset class at each financial year-end" /></div> : null}
+            <div className="scroll-x"><table><thead><tr><th>Asset class</th>{m.years.map(y => <th key={y.end} className="num">{y.label}</th>)}</tr></thead><tbody>
                 {Object.entries(m.rows).map(([k, vals]) => <tr key={k}><td>{ASSET_CLASSES[k] || k}</td>{vals.map((v, i) => <td key={i} className="num heat" data-cls={k} style={{ background: `color-mix(in srgb, var(--accent) ${Math.round(v / max * 70)}%, transparent)`, cursor: 'pointer' }} onClick={() => go('register', { preset: 'class:' + k })}>{fmtNum(v)}</td>)}</tr>)}
                 <tr className="total"><td>Total</td>{m.years.map((y, i) => <td key={y.end} className="num">{fmtNum(sum(Object.values(m.rows), r => r[i]))}</td>)}</tr></tbody></table></div>
         </>
@@ -114,8 +156,22 @@ function Exceptions() {
     const [ai, setAi] = useState<AiOut>({ k: 'none' });
     const ex = findExceptions();
     const SEV: Record<string, string> = { high: 'bad', medium: 'pending', low: 'neutral' };
+    const byArea = useMemo(() => {
+        const c: Record<string, number> = {};
+        ex.forEach(x => { c[x.cat] = (c[x.cat] || 0) + 1; });
+        return Object.entries(c).sort((a, b) => b[1] - a[1]);
+    }, [ex]);
+    const areaConfig = useMemo(() => {
+        const t = vizTheme();
+        return { type: 'bar', data: { labels: byArea.map(a => a[0]), datasets: [{ label: 'Exceptions', data: byArea.map(a => a[1]), backgroundColor: t.series[0], ...BAR, maxBarThickness: 18 }] }, options: { ...baseOptions(t, { horizontal: true }), indexAxis: 'y' } } as unknown as ChartConfiguration;
+    }, [byArea]);
     return (
         <>
+            {ex.length ? <div className="an-split an-ex">
+                <div className="sev-tiles">{(['high', 'medium', 'low'] as const).map(k => { const n = ex.filter(x => x.sev === k).length; return (
+                    <div key={k} className={`sev-tile${n ? ' sev-' + k : ''}`}><span className={`badge badge-${SEV[k]}`}>{cap(k)}</span><b>{n}</b><span>{n === 1 ? 'exception' : 'exceptions'}</span></div>); })}</div>
+                <figure className="an-fig"><figcaption>Exceptions by area</figcaption><div className="chart-box" style={{ height: Math.max(120, byArea.length * 30 + 30) + 'px' }}><ChartCanvas id="ex-chart" config={areaConfig} label="Number of exceptions by area" /></div></figure>
+            </div> : null}
             <div className="btn-row" style={{ justifyContent: 'space-between', marginBottom: '10px' }}><p>{`${ex.length} exceptions: ${ex.filter(x => x.sev === 'high').length} high, ${ex.filter(x => x.sev === 'medium').length} medium, ${ex.filter(x => x.sev === 'low').length} low.`}</p><div className="btn-row"><button className="btn btn-ghost btn-sm" id="ex-exp" onClick={e => exportMenu(e.currentTarget, () => [{ name: 'Exceptions', rows: [['Severity', 'Area', 'Lease', 'Finding', 'Action'], ...ex.map(x => [x.sev, x.cat, x.leaseId, x.text, x.fix])] }], 'Lease_exceptions', 'Lease exceptions')}>Export</button>{can('ai.use') ? <button className="btn btn-sm" id="ex-ai" onClick={() => aiReviewExceptions(ex, setAi)}>Review with AI</button> : null}</div></div><div id="ex-ai-out"><AiOutput o={ai} /></div>
             <div className="scroll-x"><table><thead><tr><th>Severity</th><th>Area</th><th>Lease</th><th>Finding</th><th>Suggested action</th></tr></thead><tbody>{ex.length ? ex.map((x, i) => <tr key={i}><td><span className={`badge badge-${SEV[x.sev]}`}>{cap(x.sev)}</span></td><td>{x.cat}</td><td>{x.leaseId ? <button className="link" data-open={x.leaseId} onClick={() => go('detail', { id: x.leaseId })}>{x.leaseId}</button> : '—'}</td><td className="wrap">{x.text}</td><td className="wrap">{x.fix}</td></tr>) : <tr><td colSpan={5} className="empty">No exceptions.</td></tr>}</tbody></table></div>
         </>

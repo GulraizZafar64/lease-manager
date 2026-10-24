@@ -10,6 +10,7 @@ import { Store } from './store';
 import { AS_OF } from './state';
 import { Ent, baseRate, entityOf, fxConvert, presentationCcy } from './enterprise';
 import { paymentRows } from './payments';
+import { conv, leasesFor } from './reporting';
 import { ERP } from './erp';
 import { deepClone, fmtNum, fyBounds, money, pct } from '../utils/format';
 import { fmtDate, monthLabel } from '../utils/dates';
@@ -29,6 +30,43 @@ export function cashForecast(months: number, list?: Lease[]): ForecastBucket[] {
         }
     }
     return buckets;
+}
+
+/* ---- Trends: earlier and later balances and cash, from the leases as recorded today ---- */
+/** The last `n` month-ends before `date`, oldest first, then `date` itself. */
+export function monthEnds(date: string, n: number): string[] {
+    const first = date.slice(0, 8) + '01', out: string[] = [];
+    for (let i = n; i >= 1; i--) out.push(addDays(addMonths(first, 1 - i), -1));
+    out.push(date);
+    return out;
+}
+export interface PositionPoint { date: string; L: number; A: number; NI: number }
+/** Lease liabilities, right-of-use assets and lessor net investment at `date`, as the dashboard totals them. */
+export function positionAt(date: string): PositionPoint {
+    let L = 0, A = 0, NI = 0;
+    for (const l of leasesFor({})) {
+        const r = getResult(l); if (!r) continue;
+        const b = balanceAt(r, date);
+        if (r.mode === 'lessee') { L += conv(l, b.L); A += conv(l, b.A); } else if (r.mode === 'lessor-finance') NI += conv(l, b.L);
+    }
+    return { date, L, A, NI };
+}
+/** Undiscounted payments of recognised lessee leases falling due in each month after `date` (or before it, when `months` is negative). */
+export function lesseePaymentsByMonth(date: string, months: number): { from: string; to: string; amount: number }[] {
+    const step = months < 0 ? -1 : 1, out: { from: string; to: string; amount: number }[] = [];
+    for (let i = 0; i < Math.abs(months); i++) {
+        const a = addMonths(date, i * step), b = addMonths(date, (i + 1) * step);
+        out.push(step > 0 ? { from: a, to: b, amount: 0 } : { from: b, to: a, amount: 0 });
+    }
+    if (step < 0) out.reverse();
+    for (const l of leasesFor({ role: 'lessee' })) {
+        const r = getResult(l); if (!r || r.mode !== 'lessee') continue;
+        for (const f of r.cashflows) {
+            if (f.type === 'unguaranteed residual value') continue;
+            const m = out.find(x => f.date > x.from && f.date <= x.to); if (m) m.amount += conv(l, f.amount);
+        }
+    }
+    return out;
 }
 
 export interface PortfolioFigures { L: number; A: number; cost: number; cash: number }

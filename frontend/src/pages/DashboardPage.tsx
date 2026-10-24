@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import type { ActiveElement, ChartConfiguration, ChartEvent, TooltipItem } from 'chart.js';
+import type { ActiveElement, ChartConfiguration, ChartEvent } from 'chart.js';
 import { addDays, addMonths, balanceAt, EVENT_TYPES, num, periodTotals } from '../domain/engine';
 import { ASSET_CLASSES, SETTINGS } from '../domain/settings';
 import { Store } from '../domain/store';
@@ -9,17 +9,18 @@ import { audit, baseRate, Ent, FX_MISSING, fxConvert, gate, myUser, presentation
 import { BANDS_STANDARD, conv, currentSplit, leasesFor, lesseeMovement, maturityTable } from '../domain/reporting';
 import { pendingApprovals } from '../domain/approvals';
 import { paymentRows } from '../domain/payments';
-import { cashForecast, findExceptions } from '../domain/analytics';
+import { cashForecast, findExceptions, lesseePaymentsByMonth, monthEnds, positionAt, type PositionPoint } from '../domain/analytics';
 import { loadSample } from '../domain/sample';
 import { go, refresh } from '../domain/nav';
 import { AS_OF, SCOPE } from '../domain/state';
 import { useAppState } from '../hooks/useAppState';
-import { ChartCanvas } from '../components/common/ChartCanvas';
+import { BAR, ChartCanvas, baseOptions, lineSeries, pointer, vizTheme } from '../components/common/ChartCanvas';
+import { Delta, Sparkline } from '../components/common/Viz';
 import { openPaymentModal } from '../components/lease/PaymentModal';
 import { openEventWizard } from '../components/lease/EventWizard';
 import { Modal, toast } from '../utils/uiStore';
 import { fmtNum, fyBounds, money, sum, unitNote } from '../utils/format';
-import { fmtDate } from '../utils/dates';
+import { fmtDate, monthLabel } from '../utils/dates';
 
 /* ---- Icons (24×24 outline, drawn in the current text colour) ---- */
 const I = {
@@ -86,36 +87,8 @@ const ALERT_FILTERS: [key: 'all' | AlertKind, label: string][] = [['all', 'All']
 const ALERTS_SHOWN = 6;
 
 /* ---- Charts ----
-   Series colours come from the theme (--viz-1..3), checked as a set for colour-blind separation and
-   contrast on the card surface in both light and dark. Thin bars with rounded ends, hairline grid. */
-const compactTick = (v: number | string): string => { const n = Number(v), a = Math.abs(n); return a >= 1e9 ? (n / 1e9).toFixed(1) + 'bn' : a >= 1e6 ? (n / 1e6).toFixed(0) + 'm' : a >= 1e3 ? (n / 1e3).toFixed(0) + 'k' : String(v); };
-/** As the original: parsed.x, else parsed.y, else the parsed value itself. */
-const parsedValue = (p: unknown): unknown => { const o = (p && typeof p === 'object' ? p : {}) as { x?: number | null; y?: number | null }; return o.x ?? o.y ?? p; };
-
-function vizTheme() {
-    const css = getComputedStyle(document.documentElement), v = (n: string) => css.getPropertyValue(n).trim();
-    return { s1: v('--viz-1'), s2: v('--viz-2'), s3: v('--viz-3'), surface: v('--surface'), ink: v('--strong'), grid: v('--grid') };
-}
-type Viz = ReturnType<typeof vizTheme>;
-const pointer = (e: ChartEvent, els: ActiveElement[]) => { const t = e.native && e.native.target as HTMLElement | null; if (t) t.style.cursor = els.length ? 'pointer' : 'default'; };
-
-function baseOptions(t: Viz, o: { horizontal?: boolean; stacked?: boolean; legend?: boolean } = {}) {
-    const font = { size: 11.5 };
-    const valueAxis = { stacked: !!o.stacked, beginAtZero: true, border: { display: false }, grid: { color: t.grid }, ticks: { callback: compactTick, maxTicksLimit: 5, font, padding: 6 } };
-    const categoryAxis = { stacked: !!o.stacked, border: { display: false }, grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, font, padding: 6 } };
-    return {
-        responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false, axis: o.horizontal ? 'y' : 'x' },
-        plugins: {
-            legend: o.legend ? { position: 'top', align: 'start', labels: { sort: (a: { datasetIndex?: number }, b: { datasetIndex?: number }) => (a.datasetIndex || 0) - (b.datasetIndex || 0), usePointStyle: true, pointStyle: 'circle', boxWidth: 8, boxHeight: 8, padding: 14, font: { size: 12 } } } : { display: false },
-            tooltip: {
-                backgroundColor: t.ink, titleColor: t.surface, bodyColor: t.surface, padding: 10, cornerRadius: 8, boxPadding: 4, usePointStyle: true,
-                callbacks: { label: (c: TooltipItem<'bar'>) => ` ${c.dataset.label ? c.dataset.label + ': ' : ''}${fmtNum(parsedValue(c.parsed))}` },
-            },
-        },
-        scales: o.horizontal ? { x: valueAxis, y: categoryAxis } : { x: categoryAxis, y: valueAxis },
-    };
-}
-const bar = { borderRadius: 4, maxBarThickness: 26, categoryPercentage: 0.7, barPercentage: 0.9 };
+   Series colours, axes and tooltips come from the shared chart theme (components/common/ChartCanvas). */
+const bar = BAR;
 
 interface DashChart { config: ChartConfiguration; empty: boolean }
 function dashCharts(): { cls: DashChart; mat: DashChart; profile: DashChart } {
@@ -124,12 +97,12 @@ function dashCharts(): { cls: DashChart; mat: DashChart; profile: DashChart } {
     for (const l of leasesFor({ role: 'lessee' })) { const r = getResult(l); if (!r || r.mode !== 'lessee') continue; byClass[l.assetClass] = (byClass[l.assetClass] || 0) + conv(l, balanceAt(r, AS_OF).L); }
     const keys = Object.keys(byClass).filter(k => byClass[k] > 0.5).sort((a, b) => byClass[b] - byClass[a]);
     const cls = {
-        type: 'bar', data: { labels: keys.map(k => ASSET_CLASSES[k] || k), datasets: [{ label: 'Lease liabilities', data: keys.map(k => byClass[k]), backgroundColor: t.s1, ...bar }] },
+        type: 'bar', data: { labels: keys.map(k => ASSET_CLASSES[k] || k), datasets: [{ label: 'Lease liabilities', data: keys.map(k => byClass[k]), backgroundColor: t.series[0], ...bar }] },
         options: { ...baseOptions(t, { horizontal: true }), indexAxis: 'y', onClick: (_e: ChartEvent, els: ActiveElement[]) => { if (els.length) go('register', { preset: 'class:' + keys[els[0].index] }); }, onHover: pointer },
     };
     const m = maturityTable('lessee', AS_OF, BANDS_STANDARD);
     const mat = {
-        type: 'bar', data: { labels: ['Within 1 year', '1 to 5 years', 'After 5 years'], datasets: [{ label: 'Undiscounted payments', data: m.rows.map(r => r.amount), backgroundColor: t.s1, ...bar, maxBarThickness: 44 }] },
+        type: 'bar', data: { labels: ['Within 1 year', '1 to 5 years', 'After 5 years'], datasets: [{ label: 'Undiscounted payments', data: m.rows.map(r => r.amount), backgroundColor: t.series[0], ...bar }] },
         options: { ...baseOptions(t), onClick: () => go('reports', { report: 'maturity' }, { reset: true }), onHover: (e: ChartEvent) => { const el = e.native && e.native.target as HTMLElement | null; if (el) el.style.cursor = 'pointer'; } },
     };
     // Expense profile by financial year: IFRS 16 cost is front-loaded relative to cash rent
@@ -150,9 +123,9 @@ function dashCharts(): { cls: DashChart; mat: DashChart; profile: DashChart } {
         type: 'bar', data: {
             labels: fys.map(y => y.label), datasets: [
                 // The 2px top edge in the card colour separates the stacked segments
-                { label: 'Depreciation and exempt lease expense', data: dep, backgroundColor: t.s1, ...bar, borderRadius: 0, borderColor: t.surface, borderWidth: { top: 2 }, borderSkipped: 'start', stack: 'cost', order: 1 },
-                { label: 'Interest', data: int, backgroundColor: t.s2, ...bar, stack: 'cost', order: 1 },
-                { label: 'Cash paid', data: cash, type: 'line', borderColor: t.s3, backgroundColor: t.s3, borderWidth: 2, pointRadius: 4, pointHoverRadius: 5, pointBorderColor: t.surface, pointBorderWidth: 2, tension: 0.25, order: 0 }],
+                { label: 'Depreciation and exempt lease expense', data: dep, backgroundColor: t.series[0], ...bar, borderRadius: 0, borderColor: t.surface, borderWidth: { top: 2 }, borderSkipped: 'start', stack: 'cost', order: 1 },
+                { label: 'Interest', data: int, backgroundColor: t.series[1], ...bar, stack: 'cost', order: 1 },
+                { label: 'Cash paid', data: cash, type: 'line', borderColor: t.series[2], backgroundColor: t.series[2], borderWidth: 2, pointRadius: 4, pointHoverRadius: 5, pointBorderColor: t.surface, pointBorderWidth: 2, tension: 0.25, order: 0 }],
         },
         options: baseOptions(t, { stacked: true, legend: true }),
     };
@@ -168,15 +141,42 @@ function forecastChart(fcast: ReturnType<typeof cashForecast>): DashChart {
     const t = vizTheme();
     const config = {
         type: 'bar', data: { labels: fcast.map(x => x.label.slice(0, 3)), datasets: [
-            { label: 'Payments', data: fcast.map(x => -x.out), backgroundColor: t.s1, ...bar, maxBarThickness: 16 },
-            { label: 'Receipts', data: fcast.map(x => x.inn), backgroundColor: t.s2, ...bar, maxBarThickness: 16 }] },
+            { label: 'Payments', data: fcast.map(x => -x.out), backgroundColor: t.series[0], ...bar, maxBarThickness: 16 },
+            { label: 'Receipts', data: fcast.map(x => x.inn), backgroundColor: t.series[1], ...bar, maxBarThickness: 16 }] },
         options: baseOptions(t, { stacked: true, legend: true }),
     };
     return { config: config as unknown as ChartConfiguration, empty: fcast.every(x => !x.out && !x.inn) };
 }
 
+/** Balances at each month-end in the chosen history: one axis, all in the presentation currency. */
+function trendChart(pts: PositionPoint[]): DashChart {
+    const t = vizTheme(), last = pts.length - 1, hasNI = pts.some(p => Math.abs(p.NI) >= 0.5);
+    const datasets = [
+        lineSeries(t, t.series[0], 'Lease liabilities', pts.map(p => p.L), true),
+        lineSeries(t, t.series[1], 'Right-of-use assets', pts.map(p => p.A)),
+        ...(hasNI ? [lineSeries(t, t.series[2], 'Net investment in leases', pts.map(p => p.NI))] : []),
+    ];
+    const config = {
+        type: 'line', data: { labels: pts.map((p, i) => i === last ? fmtDate(p.date) : monthLabel(p.date)), datasets },
+        options: baseOptions(t, { legend: true }),
+    };
+    return { config: config as unknown as ChartConfiguration, empty: pts.every(p => Math.abs(p.L) < 0.5 && Math.abs(p.A) < 0.5 && Math.abs(p.NI) < 0.5) };
+}
+
+/** Lease cost as the P&L report totals it: depreciation, interest, exempt and variable lease expense, impairment, less gains. */
+function leaseCost(from: string, to: string): number {
+    const m = lesseeMovement(from, to);
+    return sum(Object.values(m.pl.depByClass), x => x) + m.pl.interest + m.pl.st + m.pl.lv + m.pl.variable - m.pl.gain + m.pl.impairment;
+}
+
+/* ---- Balance history shown on the dashboard (per user, on this browser) ---- */
+type Range = 12 | 36 | 60;
+const RANGES: [Range, string][] = [[12, '1 year'], [36, '3 years'], [60, '5 years']];
+const rangeKey = () => companyKey('dashRange.' + Store.actorId());
+const savedRange = (): Range => { try { const v = Number(localStorage.getItem(rangeKey())); return v === 36 || v === 60 ? v : 12; } catch { return 12; } };
+
 /* ---- Widgets (per-user preferences on this browser) ---- */
-const WIDGETS: [key: string, label: string][] = [['position', 'Position'], ['charts', 'Charts'], ['attention', 'Attention and expiries'], ['forecast', 'Cash forecast, 12 months'], ['ops', 'Operations status'], ['fx', 'Currency exposure']];
+const WIDGETS: [key: string, label: string][] = [['position', 'Position'], ['trend', 'Balances over time'], ['charts', 'Charts'], ['attention', 'Attention and expiries'], ['forecast', 'Cash forecast, 12 months'], ['ops', 'Operations status'], ['fx', 'Currency exposure']];
 type WidgetPrefs = Record<string, boolean>;
 const widgetPrefs = (): WidgetPrefs => { try { return JSON.parse(localStorage.getItem(companyKey('widgets.' + Store.actorId())) || '{}') as WidgetPrefs; } catch { return {}; } };
 
@@ -216,11 +216,13 @@ function Pending0() {
 const plural = (n: number, one: string, many: string) => n + (n === 1 ? one : many);
 
 /* ---- Building blocks ---- */
-function Kpi({ k, icon, label, value, sub, tone, onOpen, children }: { k: string; icon: string; label: string; value: string; sub: ReactNode; tone?: 'warn'; onOpen: (k: string) => void; children?: ReactNode }) {
+function Kpi({ k, icon, label, value, sub, tone, delta, spark, onOpen, children }: { k: string; icon: string; label: string; value: string; sub: ReactNode; tone?: 'warn'; delta?: ReactNode; spark?: ReactNode; onOpen: (k: string) => void; children?: ReactNode }) {
     return (
         <button className={`kpi${tone ? ' kpi-' + tone : ''}`} data-go={k} onClick={() => onOpen(k)}>
             <span className="kpi-head"><span className="kpi-ic"><Ic d={icon} size={15} /></span><span className="kpi-l">{label}</span></span>
             <span className="kpi-v">{value}</span>
+            {delta ? <span className="kpi-d">{delta}</span> : null}
+            {spark}
             {children}
             <span className="kpi-s">{sub}</span>
         </button>
@@ -257,13 +259,25 @@ function Dashboard({ notice }: { notice: ReactNode }) {
     const split = currentSplit(AS_OF);
     let rou = 0, ni = 0;
     for (const l of leasesFor({})) { const r = getResult(l); if (!r) continue; const b = balanceAt(r, AS_OF); if (r.mode === 'lessee') rou += conv(l, b.A); if (r.mode === 'lessor-finance') ni += conv(l, b.L); }
-    const mv = lesseeMovement(fy.start, AS_OF);
-    const plYTD = sum(Object.values(mv.pl.depByClass), x => x) + mv.pl.interest + mv.pl.st + mv.pl.lv + mv.pl.variable - mv.pl.gain + mv.pl.impairment;
+    const plYTD = leaseCost(fy.start, AS_OF);
     const mat = maturityTable('lessee', AS_OF, BANDS_STANDARD);
     const pend = pendingApprovals();
     const expiring = Store.leases.filter(l => isLive(l) && ['active'].includes(statusOf(l, AS_OF)) && leaseEnd(l) <= addMonths(AS_OF, 12));
     const alerts = buildAlerts();
     const charts = useMemo(dashCharts, [version]);
+    const [range, setRange] = useState<Range>(savedRange);
+    const pickRange = (r: Range) => { setRange(r); try { localStorage.setItem(rangeKey(), String(r)); } catch { /* storage unavailable */ } };
+    // Month-end balances over the chosen history, payments by month around today, and lease cost by month this year
+    const hist = useMemo(() => monthEnds(AS_OF, range).map(positionAt), [version, range]); // eslint-disable-line react-hooks/exhaustive-deps
+    const trend = useMemo(() => trendChart(hist), [hist]);
+    const pays = useMemo(() => ({ next: lesseePaymentsByMonth(AS_OF, 12), prev: lesseePaymentsByMonth(AS_OF, -12) }), [version]); // eslint-disable-line react-hooks/exhaustive-deps
+    const cost = useMemo(() => {
+        const months: number[] = [];
+        for (let s = fy.start; s <= AS_OF; s = addMonths(s, 1)) { const e = addDays(addMonths(s, 1), -1); months.push(leaseCost(s, e < AS_OF ? e : AS_OF)); }
+        return { months, lastYear: leaseCost(addMonths(fy.start, -12), addMonths(AS_OF, -12)) };
+    }, [version]); // eslint-disable-line react-hooks/exhaustive-deps
+    const h0 = hist[0], since = fmtDate(h0.date);
+    const sparkLabel = (what: string, xs: number[], when: string) => `${what} ${when}: from ${fmtNum(xs[0])} to ${fmtNum(xs[xs.length - 1])}`;
 
     // Enterprise additions
     const P = presentationCcy(), ex = findExceptions(), fcast = cashForecast(12);
@@ -302,6 +316,7 @@ function Dashboard({ notice }: { notice: ReactNode }) {
                     <span className="ctx-chip"><Ic d={I.calendar} size={14} />Balances at <b>{fmtDate(AS_OF)}</b></span>
                     <span className="ctx-chip"><Ic d={I.coins} size={14} /><b>{P}</b>{unitNote()}</span>
                     <span className="ctx-chip"><b>{fy.label}</b>{fmtDate(fy.start)} to {fmtDate(fy.end)}</span>
+                    <span className="ctx-range" role="group" aria-label="Balance history shown"><span>History</span><span className="seg seg-sm">{RANGES.map(([r, label]) => <button key={r} type="button" data-range={r} aria-pressed={range === r} onClick={() => pickRange(r)}>{label}</button>)}</span></span>
                     <span className="ctx-hint">Select a figure to see the leases behind it.</span>
                 </div>
                 <div className="dash-actions">
@@ -316,17 +331,29 @@ function Dashboard({ notice }: { notice: ReactNode }) {
 
             <div className="dash-kpis" data-widget="position" hidden={!!hid.position}>
                 <Kpi k="liability" icon={I.scale} label="Lease liabilities" value={fmtNum(split.total)} onOpen={goPos}
+                    delta={<Delta now={split.total} then={h0.L} vs={since} />} spark={<Sparkline values={hist.map(p => p.L)} label={sparkLabel('Lease liabilities', hist.map(p => p.L), 'at month-ends since ' + since)} />}
                     sub={<><i className="dot dot-1" />Current {fmtNum(split.current)}<i className="dot dot-2" />Non-current {fmtNum(split.nonCurrent)}</>}>
                     <span className="kpi-meter" role="img" aria-label={`Current ${Math.round(currentShare * 100)}%, non-current ${Math.round((1 - currentShare) * 100)}%`}>
                         <span style={{ width: `${currentShare * 100}%` }} /><span style={{ width: `${(1 - currentShare) * 100}%` }} />
                     </span>
                 </Kpi>
-                <Kpi k="rou" icon={I.building} label="Right-of-use assets" value={fmtNum(rou)} sub="Net of depreciation" onOpen={goPos} />
-                <Kpi k="ni" icon={I.trend} label="Net investment in leases" value={fmtNum(ni)} sub="Lessor finance leases" onOpen={goPos} />
-                <Kpi k="maturity" icon={I.calendar} label="Payments, next 12 months" value={fmtNum(mat.rows[0].amount)} sub="Undiscounted, recognised leases" onOpen={goPos} />
-                <Kpi k="pl" icon={I.pie} label={`Lease cost, ${fy.label} to date`} value={fmtNum(plYTD)} sub="Depreciation, interest, exempt and variable" onOpen={goPos} />
+                <Kpi k="rou" icon={I.building} label="Right-of-use assets" value={fmtNum(rou)} sub="Net of depreciation" onOpen={goPos}
+                    delta={<Delta now={rou} then={h0.A} vs={since} />} spark={<Sparkline values={hist.map(p => p.A)} label={sparkLabel('Right-of-use assets', hist.map(p => p.A), 'at month-ends since ' + since)} />} />
+                <Kpi k="ni" icon={I.trend} label="Net investment in leases" value={fmtNum(ni)} sub="Lessor finance leases" onOpen={goPos}
+                    delta={<Delta now={ni} then={h0.NI} vs={since} />} spark={<Sparkline values={hist.map(p => p.NI)} label={sparkLabel('Net investment', hist.map(p => p.NI), 'at month-ends since ' + since)} />} />
+                <Kpi k="maturity" icon={I.calendar} label="Payments, next 12 months" value={fmtNum(mat.rows[0].amount)} sub="Undiscounted, recognised leases" onOpen={goPos}
+                    delta={<Delta now={sum(pays.next, x => x.amount)} then={sum(pays.prev, x => x.amount)} vs="past year" title="in the 12 months before today" />} spark={<Sparkline values={pays.next.map(x => x.amount)} label={sparkLabel('Payments due', pays.next.map(x => x.amount), 'by month over the next 12 months')} />} />
+                <Kpi k="pl" icon={I.pie} label={`Lease cost, ${fy.label} to date`} value={fmtNum(plYTD)} sub="Depreciation, interest, exempt and variable" onOpen={goPos}
+                    delta={<Delta now={plYTD} then={cost.lastYear} vs="last year" title="in the same period last year" />} spark={<Sparkline values={cost.months} label={sparkLabel('Lease cost', cost.months, 'by month this financial year')} />} />
                 <Kpi k="approvals" icon={I.check} label="Awaiting approval" value={String(pend.length)} tone={pend.length ? 'warn' : undefined} onOpen={goPos}
                     sub={`${plural(pend.filter(p => p.kind === 'event').length, ' change', ' changes')}, ${plural(pend.filter(p => p.kind === 'lease').length, ' new lease', ' new leases')}`} />
+            </div>
+
+            <div className="dash-trend" data-widget="trend" hidden={!!hid.trend}>
+                <Panel title="Balances over time" sub={`Month-end balances since ${since}, ${P}${unitNote()}. From the leases as recorded today.`} className="dc-wide"
+                    action={<PanelLink label="Run-off" onClick={() => go('analytics', { tab: 'runoff' }, { reset: true })} />}>
+                    <ChartBlock id="c-trend" chart={trend} empty="No balances in this period" height={260} />
+                </Panel>
             </div>
 
             <div className="dash-charts" data-widget="charts" hidden={!!hid.charts}>

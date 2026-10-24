@@ -35,6 +35,19 @@ function MatchModal({ stmt, line, onSave }: { stmt: BankStatement; line: BankLin
     );
 }
 
+/** Progress of a statement's reconciliation: one bar split by line status, each part labelled in the legend. */
+function ReconMeter({ parts }: { parts: [key: string, label: string, n: number][] }) {
+    const total = parts.reduce((t, p) => t + p[2], 0);
+    if (!total) return null;
+    const done = parts.filter(p => p[0] === 'matched' || p[0] === 'ignored').reduce((t, p) => t + p[2], 0);
+    return (
+        <div className="recon" role="img" aria-label={`${Math.round(done / total * 100)}% of ${total} lines reconciled`}>
+            <div className="recon-bar">{parts.filter(p => p[2]).map(([k, label, n]) => <span key={k} className={`rc-${k}`} style={{ flexGrow: n }} title={`${label}: ${n}`} />)}</div>
+            <div className="recon-key"><b>{Math.round(done / total * 100)}% reconciled</b>{parts.filter(p => p[2]).map(([k, label, n]) => <span key={k}><i className={`rc-${k}`} />{label} {n}</span>)}</div>
+        </div>
+    );
+}
+
 export function BankPage({ params: p }: ScreenProps<'bank'>) {
     useAppState();
     const fileRef = useRef<HTMLInputElement>(null);
@@ -91,7 +104,7 @@ export function BankPage({ params: p }: ScreenProps<'bank'>) {
             {head}
             <div className="kb">{list}
                 <div className="card" id="bk-body">
-                    <div className="section-head"><div><h3>{cur.name}</h3><p className="note">{`${cnt('matched')} matched, ${cnt('suggested')} suggested, ${cnt('unmatched')} unmatched, ${cnt('ignored')} not lease-related, ${cnt('duplicate')} duplicates`}</p></div><div className="btn-row"><button className="btn btn-ghost btn-sm" id="bk-auto" onClick={onAuto}>Run auto-match again</button><button className="btn btn-ghost btn-sm" id="bk-exp" onClick={onExp}>Export</button><button className="btn btn-danger btn-sm" id="bk-del" onClick={onDel}>Delete statement</button></div></div>
+                    <div className="section-head"><div><h3>{cur.name}</h3><p className="note">{`${cnt('matched')} matched, ${cnt('suggested')} suggested, ${cnt('unmatched')} unmatched, ${cnt('ignored')} not lease-related, ${cnt('duplicate')} duplicates`}</p><ReconMeter parts={[['matched', 'Matched', cnt('matched')], ['suggested', 'Suggested', cnt('suggested')], ['unmatched', 'Unmatched', cnt('unmatched')], ['ignored', 'Not lease-related', cnt('ignored')]]} /></div><div className="btn-row"><button className="btn btn-ghost btn-sm" id="bk-auto" onClick={onAuto}>Run auto-match again</button><button className="btn btn-ghost btn-sm" id="bk-exp" onClick={onExp}>Export</button><button className="btn btn-danger btn-sm" id="bk-del" onClick={onDel}>Delete statement</button></div></div>
                     <div className="scroll-x" style={{ maxHeight: '66vh' }}><table><thead><tr><th>Date</th><th>Description</th><th className="num">Amount</th><th>Status</th><th>Match</th><th></th></tr></thead><tbody>
                         {cur.lines.map(l => {
                             const sug = l.suggest ? rows.find(r => r.key === l.suggest?.key) : undefined;

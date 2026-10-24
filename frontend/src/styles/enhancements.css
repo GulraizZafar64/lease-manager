@@ -10,9 +10,10 @@
 .btn-sm { border-radius: 7px; }
 .btn svg { flex-shrink: 0; }
 
-/* Chart series, checked as a set (colour-blind separation, contrast on the card) for each theme */
-:root { --viz-1: #109a80; --viz-2: #eb6834; --viz-3: #2a78d6; }
-:root[data-theme="dark"] { --viz-1: #22a58b; --viz-2: #d95926; --viz-3: #3987e5; }
+/* Chart series in this order, checked as a set (colour-blind separation of neighbours, contrast on the card) for
+   each theme. In light, 4 and 5 sit below 3:1 on white, so charts using them also offer a table. */
+:root { --viz-1: #109a80; --viz-2: #eb6834; --viz-3: #2a78d6; --viz-4: #eda100; --viz-5: #e87ba4; --viz-6: #6250d6; }
+:root[data-theme="dark"] { --viz-1: #22a58b; --viz-2: #d95926; --viz-3: #3987e5; --viz-4: #c98500; --viz-5: #d55181; --viz-6: #9085e9; }
 
 /* ---------- Sidebar ---------- */
 .side {

@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import './styles/global.css';
 import './styles/enhancements.css';
 import './styles/dashboard.css';
+import './styles/viz.css';
 import './styles/forms.css';
 import './styles/import.css';
 import './styles/approvals.css';

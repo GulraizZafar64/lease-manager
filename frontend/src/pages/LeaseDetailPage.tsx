@@ -12,6 +12,8 @@ import { PAY_STATUS, paymentRows, type PaymentRow } from '../domain/payments';
 import { highlightText } from '../domain/contractFields';
 import { go, setParams } from '../domain/nav';
 import { useAppState } from '../hooks/useAppState';
+import type { ChartConfiguration } from 'chart.js';
+import { BAR, ChartCanvas, baseOptions, lineSeries, markerLine, vizTheme } from '../components/common/ChartCanvas';
 import { DataTable, type Column } from '../components/common/DataTable';
 import { StatusBadge } from '../components/common/Badges';
 import { JournalTable } from '../components/common/JournalTable';
@@ -86,6 +88,25 @@ function monthlyDetailRows(res: EngineResult): SheetValue[][] {
     if (res.mode === 'lessor-operating') return ([['Month', 'Start', 'Cash', 'Income', 'Accrued', 'Asset depreciation']] as SheetValue[][]).concat(res.rows.map(r => [r.t + 1, r.start, r.cash, r.income, r.accrued, r.assetDep]));
     return ([['Month', 'Start', 'Cash', 'Expense', 'Prepaid']] as SheetValue[][]).concat(res.rows.map(r => [r.t + 1, r.start, r.cash, r.expense, r.prepaid]));
 }
+/** Charts of the schedule at the chosen grouping: balances over the lease, and cost or income against cash each period. */
+function scheduleCharts(res: EngineResult, agg: AggregateRow[], labels: string[]): { title: string; config: ChartConfiguration }[] {
+    const t = vizTheme(), now = agg.findIndex(a => a.start <= AS_OF && AS_OF <= a.end);
+    const bars = (label: string, data: number[], i: number, stack?: string) => ({ label, data, backgroundColor: t.series[i], ...BAR, maxBarThickness: 18, ...(stack ? { stack, borderRadius: 0, borderColor: t.surface, borderWidth: { top: 2 }, borderSkipped: 'start' } : {}) });
+    const cash = (label: string, data: number[]) => ({ ...lineSeries(t, t.series[2], label, data), pointRadius: data.length > 24 ? 0 : 3, order: 0 });
+    const plugins = now >= 0 ? [markerLine(now, 'Today')] : [];
+    const chart = (title: string, datasets: object[], stacked = false) => ({ title, config: { type: 'bar', data: { labels, datasets }, options: baseOptions(t, { legend: true, stacked }), plugins } as unknown as ChartConfiguration });
+    if (res.mode === 'lessee') return [
+        { title: 'Balances at the end of each period', config: { type: 'line', data: { labels, datasets: [lineSeries(t, t.series[0], 'Lease liability', agg.map(a => a.closeL || 0), true), lineSeries(t, t.series[1], 'Right-of-use asset', agg.map(a => a.closeA || 0))] }, options: baseOptions(t, { legend: true }), plugins } as unknown as ChartConfiguration },
+        chart('Lease cost against cash paid', [{ ...bars('Depreciation', agg.map(a => a.dep), 0, 'cost'), borderWidth: 0 }, bars('Interest', agg.map(a => a.int), 1, 'cost'), cash('Payments', agg.map(a => a.payAdv + a.payArr))], true),
+    ];
+    if (res.mode === 'lessor-finance') return [
+        { title: 'Net investment at the end of each period', config: { type: 'line', data: { labels, datasets: [lineSeries(t, t.series[0], 'Net investment', agg.map(a => a.closeL || 0), true)] }, options: baseOptions(t), plugins } as unknown as ChartConfiguration },
+        chart('Finance income against cash received', [bars('Finance income', agg.map(a => a.int), 0), cash('Receipts', agg.map(a => a.rcpAdv + a.rcpArr))]),
+    ];
+    if (res.mode === 'lessor-operating') return [chart('Lease income against cash received', [bars('Lease income (straight-line)', agg.map(a => a.income), 0), cash('Cash received', agg.map(a => a.cash))])];
+    return [chart('Lease expense against cash paid', [bars('Lease expense (straight-line)', agg.map(a => a.expense), 0), cash('Cash paid', agg.map(a => a.cash))])];
+}
+
 function Schedule({ l, p }: { l: Lease; p: ScreenProps<'detail'>['params'] }) {
     const res = getResult(l);
     if (!res) return <p className="empty">Add a commencement date, term and payment to see the schedule.</p>;
@@ -110,9 +131,11 @@ function Schedule({ l, p }: { l: Lease; p: ScreenProps<'detail'>['params'] }) {
     const totIdx = { lessee: [2, 3, 4, 5, 8, 9, 10, 12], 'lessor-finance': [2, 3, 4, 5], 'lessor-operating': [1, 2, 4, 5], exempt: [1, 2] }[res.mode];
     const totals = cols.map((_, i) => totIdx.includes(i) ? sum(rows, r => r[i]) : null);
     const evRows = new Set(agg.map((a, i) => a.events.length ? i : -1).filter(i => i >= 0));
+    const charts = scheduleCharts(res, agg, agg.map(a => String(label(a))));
     const evLabel = (a: AggregateRow) => a.events.map(e => (e as { label?: string }).label).join('; ');
     return <>
         <div className="section-head"><div className="seg" role="group" aria-label="Group by">{([['month', 'Month'], ['payment', 'Payment period'], ['fy', 'Financial year'], ['year', 'Lease year']] as const).map(([k, v]) => <button key={k} data-by={k} aria-pressed={by === k} onClick={() => setParams<'detail'>({ by: k })}>{v}</button>)}</div>{can('ai.use') ? <button className="btn btn-ghost" id="s-why" onClick={() => go('ai', { leaseId: l.id, ask: `Explain step by step how the lease liability and right-of-use asset for ${l.id} are calculated: the lease term and payments included, the discount rate and monthly conversion, the first year's interest and depreciation, and any remeasurement or modification. Use get_lease and show the arithmetic so I can check it against the schedule.` }, { reset: true })}>Explain this calculation</button> : null}<button className="btn btn-ghost" id="s-exp" onClick={e => exportMenu(e.currentTarget, () => [{ name: 'Schedule', rows: ([cols] as SheetValue[][]).concat(rows) }, { name: 'Monthly detail', rows: monthlyDetailRows(res) }], `Schedule_${l.id}`, `${l.id} ${l.name}: schedule (${l.currency})`)}>Export schedule</button></div>
+        <div className={`sched-charts${charts.length === 1 ? ' one' : ''}`}>{charts.map((c, i) => <figure key={c.title} className="an-fig"><figcaption>{c.title}<span>{l.currency}, by {by === 'month' ? 'month' : by === 'fy' ? 'financial year' : by === 'year' ? 'lease year' : 'payment period'}</span></figcaption><div className="chart-box" style={{ height: '240px' }}><ChartCanvas id={`s-chart-${i}`} config={c.config} label={`${c.title}, ${l.currency}`} /></div></figure>)}</div>
         <div id="s-body"><div className="scroll-x" style={{ maxHeight: '62vh' }}><table><thead><tr>{cols.map((c, i) => <th key={i} className={i ? 'num' : ''}>{c}</th>)}</tr></thead><tbody>
             {rows.map((r, i) => <tr key={i} className={evRows.has(i) ? 'row-event' : ''} title={evRows.has(i) ? evLabel(agg[i]) : ''}>{r.map((v, j) => <td key={j} className={j ? 'num' : ''}>{j ? fmtNum(v) : String(v)}</td>)}</tr>)}
         </tbody><tfoot><tr>{totals.map((v, i) => <td key={i} className={i ? 'num' : ''}>{i === 0 ? 'Total' : v === null ? '' : fmtNum(v)}</td>)}</tr></tfoot></table></div>
@@ -214,6 +237,8 @@ export function LeaseDetailPage({ params: p }: ScreenProps<'detail'>) {
     const pendingEvents = (l.events || []).filter(e => e.status === 'pending');
     const live = isLive(l) && ['active', 'future'].includes(st);
     const tab = (p.tab || 'summary') as Tab;
+    const span = T.commencement ? new Date(leaseEnd(l)).getTime() - new Date(T.commencement).getTime() : 0;
+    const elapsed = span > 0 ? Math.max(0, Math.min(1, (new Date(AS_OF).getTime() - new Date(T.commencement).getTime()) / span)) : null;
     const rate = res && 'annualRate' in res.initial && res.initial.annualRate != null ? res.initial.annualRate : null;
 
     const edit = () => go('entry', { mode: 'edit', id: l.id });
@@ -252,7 +277,8 @@ export function LeaseDetailPage({ params: p }: ScreenProps<'detail'>) {
             {res && res.mode === 'lessor-operating' ? <><div className="pos"><div className="l">Lease income per month</div><div className="v">{money(res.initial.monthlyIncome)}</div><div className="s">Straight-line</div></div><div className="pos"><div className="l">Accrued / (deferred) income</div><div className="v">{money(b.accrued)}</div></div></> : null}
             {res && res.mode === 'exempt' ? <div className="pos"><div className="l">Expense per month</div><div className="v">{money(res.initial.monthlyExpense)}</div><div className="s">{cap(res.exemption)} exemption</div></div> : null}
             <div className="pos"><div className="l">Next {lr ? 'receipt' : 'payment'}</div><div className="v">{nextPay ? money(nextPay.amount) : '—'}</div><div className="s">{nextPay ? (nextPay.status === 'overdue' ? 'Overdue since ' : 'Due ') + fmtDate(nextPay.dueDate) : 'None scheduled'}</div></div>
-            <div className="pos"><div className="l">Lease term</div><div className="v">{res ? res.termMonths : N(T.termMonths)} months</div><div className="s">{`${fmtDate(T.commencement)} to ${fmtDate(leaseEnd(l))}`}</div></div>
+            <div className="pos"><div className="l">Lease term</div><div className="v">{res ? res.termMonths : N(T.termMonths)} months</div><div className="s">{`${fmtDate(T.commencement)} to ${fmtDate(leaseEnd(l))}`}</div>
+                {elapsed !== null ? <div className="term-meter" role="img" aria-label={`${Math.round(elapsed * 100)}% of the lease term has passed`}><span style={{ width: `${elapsed * 100}%` }} /><b>{Math.round(elapsed * 100)}% elapsed</b></div> : null}</div>
             <div className="pos"><div className="l">Discount rate</div><div className="v">{rate != null ? pct(rate) : pct(T.discountRate)}</div><div className="s">{T.rateBasis === 'solve' ? 'Rate implicit in the lease' : lr ? 'Rate implicit in the lease' : 'Incremental borrowing rate'}</div></div>
         </div>
         <div className="card">

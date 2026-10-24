@@ -1,0 +1,107 @@
+/* Data visualisation pieces shared across pages: sparklines, changes, stat tiles, meters and chart cards.
+   Marks use the --viz-* series colours; text stays in the text inks; states use the status colours with a label. */
+
+/* ---------- Sparkline: history in a quiet ink, the latest point in the accent ---------- */
+.spark { position: relative; display: block; width: 100%; height: 30px; margin-top: auto; }
+.spark svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.spark-line { fill: none; stroke: color-mix(in srgb, var(--muted) 70%, transparent); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+.spark-area { fill: color-mix(in srgb, var(--viz-1) 9%, transparent); stroke: none; }
+.spark-end {
+    position: absolute; width: 7px; height: 7px; border-radius: 50%; transform: translate(-50%, -50%);
+    background: var(--viz-1); box-shadow: 0 0 0 2px var(--surface);
+}
+.kpi:hover .spark-line { stroke: color-mix(in srgb, var(--viz-1) 75%, var(--muted)); }
+.kpi-s { margin-top: auto; }
+.spark ~ .kpi-s, .spark ~ .kpi-meter, .kpi-meter ~ .kpi-s { margin-top: 0; }
+
+/* ---------- Change against an earlier point (neutral: for balances, up is neither good nor bad) ---------- */
+.kpi-d { display: block; min-height: 18px; }
+.delta { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); white-space: nowrap; max-width: 100%; }
+.delta svg { flex-shrink: 0; color: var(--text); }
+.delta b { color: var(--strong); font-weight: 600; }
+.delta span { overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------- Small segmented control, used for the dashboard history and chart/table switches ---------- */
+.seg-sm button { padding: 4px 10px; font-size: 12px; line-height: 1.4; }
+.ctx-range { display: inline-flex; align-items: center; gap: 6px; margin-left: 4px; font-size: 12.5px; color: var(--muted); }
+.ctx-range .seg { border-radius: 999px; background: var(--surface); }
+.ctx-range .seg button { background: transparent; }
+.ctx-range .seg button[aria-pressed="true"] { background: var(--strong); color: var(--surface); }
+:root[data-theme="dark"] .ctx-range .seg button[aria-pressed="true"] { background: var(--accent); color: #06221d; }
+
+/* ---------- Dashboard: balances over time ---------- */
+.dash-trend { display: grid; }
+.dash-trend .dc-chart { min-height: 260px; }
+
+/* ---------- Chart card with a table view ---------- */
+.viz-card { display: flex; flex-direction: column; min-width: 0; }
+.viz-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.viz-chart { margin: 0 18px 18px; }
+.viz-table { margin: 0 18px 18px; border: 1px solid var(--line); border-radius: 8px; overflow: auto; }
+.viz-table table { margin: 0; }
+.viz-card .dc-empty { margin: 0 18px 18px; min-height: 120px; }
+.viz-fill .viz-chart { flex: 1 1 auto; height: auto; }
+.viz-fill .viz-chart > canvas { position: absolute; inset: 0; }
+
+/* ---------- Figures inside pages (analytics, lease schedule) ---------- */
+.an-fig { margin: 0; min-width: 0; padding: 14px 16px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
+.an-fig figcaption { margin-bottom: 10px; font-size: 13.5px; font-weight: 600; color: var(--strong); }
+.an-fig figcaption span { display: block; margin-top: 1px; font-size: 12px; font-weight: 400; color: var(--muted); }
+.an-split { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; margin-bottom: 16px; }
+@media (min-width: 1100px) {
+    .an-split { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
+    .an-split.an-ex { grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); }
+}
+.sev-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.sev-tile { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
+.sev-tile b { font-size: 24px; font-weight: 600; line-height: 1.1; color: var(--strong); }
+.sev-tile > span:last-child { font-size: 12px; color: var(--muted); }
+.sev-high { border-left: 3px solid var(--bad); }
+.sev-medium { border-left: 3px solid var(--warn); }
+
+/* Lease schedule: charts above the table, both following the "Group by" choice */
+.sched-charts { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 16px 20px; border-bottom: 1px solid var(--line); background: var(--surface-2); }
+@media (min-width: 1100px) { .sched-charts:not(.one) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Lease term elapsed */
+.term-meter { position: relative; height: 6px; margin-top: 9px; border-radius: 3px; background: color-mix(in srgb, var(--viz-1) 16%, var(--surface-3)); }
+.term-meter span { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--viz-1); }
+.term-meter b { position: absolute; top: 9px; left: 0; font-size: 11.5px; font-weight: 500; color: var(--muted); white-space: nowrap; }
+.pos:has(.term-meter) { padding-bottom: 30px; }
+
+/* ---------- Stat tiles (payments) ---------- */
+.pay-summary { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; margin-bottom: 14px; }
+.stat-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; align-content: start; }
+@media (min-width: 1200px) {
+    .pay-summary { grid-template-columns: minmax(260px, 1fr) minmax(0, 2.2fr); }
+    .pay-summary .stat-tiles { grid-template-columns: minmax(0, 1fr); }
+}
+.stat-tile {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; padding: 14px 16px; text-align: left; font: inherit; color: inherit;
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); cursor: pointer;
+    transition: border-color .18s ease, box-shadow .18s ease, transform .18s var(--ease-out);
+}
+.stat-tile:hover:not(:disabled) { border-color: var(--line-2); box-shadow: var(--shadow-hover); transform: translateY(-1px); }
+.stat-tile:disabled { cursor: default; }
+.st-l { font-size: 12.5px; font-weight: 500; color: var(--muted); }
+.st-v { font-size: 22px; font-weight: 600; line-height: 1.2; letter-spacing: -.01em; color: var(--strong); }
+.st-s { font-size: 12px; color: var(--muted); }
+.st-bad { border-left: 3px solid var(--bad); }
+.stat-tile .badge { margin-top: 2px; }
+.st-meter { display: block; width: 100%; height: 6px; margin-top: 4px; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, var(--viz-1) 16%, var(--surface-3)); }
+.st-meter span { display: block; height: 100%; border-radius: 3px; background: var(--viz-1); }
+
+/* ---------- Bank reconciliation progress: states, each named in the key ---------- */
+.recon { margin-top: 8px; max-width: 560px; }
+.recon-bar { display: flex; gap: 2px; height: 8px; border-radius: 4px; overflow: hidden; background: var(--surface-3); }
+.recon-bar span { display: block; min-width: 3px; }
+.recon-key { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 6px; font-size: 12px; color: var(--muted); }
+.recon-key b { color: var(--strong); font-weight: 600; }
+.recon-key i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: 0; }
+.rc-matched { background: var(--ok); }
+.rc-suggested { background: var(--warn); }
+.rc-unmatched { background: var(--bad); }
+.rc-ignored { background: var(--line-2); }
+
+@media (prefers-reduced-motion: reduce) { .stat-tile { transition: none; } .stat-tile:hover:not(:disabled) { transform: none; } }
+@media print { .viz-actions .seg, .ctx-range { display: none; } .stat-tile { box-shadow: none; } }

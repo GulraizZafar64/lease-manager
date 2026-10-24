@@ -5,7 +5,7 @@ set -euo pipefail
 BACKUP_DIR=${BACKUP_DIR:-/var/backups/lease-manager}
 BACKUP_PASSFILE=${BACKUP_PASSFILE:-/etc/lease-manager/backup.pass}
 KEEP_DAYS=${KEEP_DAYS:-35}
-COMPOSE="docker compose -f $(dirname "$0")/../deploy/docker-compose.yml"
+COMPOSE=${COMPOSE:-"docker compose -f $(dirname "$0")/../deploy/docker-compose.yml"}   # the cloud set-up passes its own
 mkdir -p "$BACKUP_DIR"; chmod 700 "$BACKUP_DIR"
 STAMP=$(date +%Y%m%d-%H%M%S)
 OUT="$BACKUP_DIR/leasedb-$STAMP.dump.enc"

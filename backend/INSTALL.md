@@ -56,7 +56,7 @@ docker compose -f deploy/docker-compose.yml exec app node src/cli.js create-enti
 ```
 The temporary password is shown once. At first sign-in you scan a QR code with an authenticator app (Microsoft or Google Authenticator), then set a new password. Super administrators then add people on the web app's **Users** screen (or through the API); each new person's temporary password is shown once.
 
-The Docker set-up serves the API only. The web app (`../frontend`) is built with `npm run build`; serve its `dist/` folder from the same site as `/api`, with unknown paths answered by `index.html`. This is not yet part of `deploy/`.
+The Docker set-up serves the API only. The web app (`../frontend`) is built with `npm run build`; serve its `dist/` folder from the same site as `/api`, with unknown paths answered by `index.html`. The cloud set-up in the repository's top-level `deploy/` folder does this (web app, API and database on one server with HTTPS).
 
 ## 7. Native install (no Docker)
 Install Node.js 20 LTS and PostgreSQL 16. Create the database and user, copy the app to `/opt/lease-manager`, run `npm ci --omit=dev`, put the settings in `/etc/lease-manager/env`, install `deploy/lease-manager.service` into systemd, and put a reverse proxy with TLS (Caddy, nginx or IIS) in front of port 8080. Set `TRUST_PROXY=true`.

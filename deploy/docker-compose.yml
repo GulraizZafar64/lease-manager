@@ -1,0 +1,46 @@
+# Cloud deployment on one Linux server (for example Oracle Cloud Always Free): PostgreSQL, the API, and Caddy,
+# which serves the web app and the API on one address with a free Let's Encrypt certificate.
+# Only Caddy is reachable from outside; the database and API are on an internal network.
+# Settings come from deploy/.env, which install.sh creates (never commit it).
+name: lease-manager
+services:
+  db:
+    image: postgres:16.4-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: leasedb
+      POSTGRES_USER: lease
+      # Used only when the database is first created; changing it later does not change the password
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in deploy/.env}
+    volumes: [dbdata:/var/lib/postgresql/data]
+    networks: [internal]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U lease -d leasedb"], interval: 10s, retries: 10 }
+  app:
+    image: lease-manager:${APP_VERSION:-0.1.0}
+    build: { context: ../backend }
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://lease:${DB_PASSWORD}@db:5432/leasedb
+      MASTER_KEY: ${MASTER_KEY:?Set MASTER_KEY in deploy/.env}
+      ORG_NAME: ${ORG_NAME:-Lease Manager}
+      REQUIRE_MFA: ${REQUIRE_MFA:-true}
+      COOKIE_SECURE: "true"
+      TRUST_PROXY: "true"
+    depends_on: { db: { condition: service_healthy } }
+    networks: [internal]
+  web:
+    image: lease-manager-web:${APP_VERSION:-0.1.0}
+    build: { context: ../frontend, dockerfile: ../deploy/web.Dockerfile }
+    restart: unless-stopped
+    ports: ["80:80", "443:443", "443:443/udp"]
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in deploy/.env}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL in deploy/.env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    depends_on: [app]
+    networks: [internal]
+volumes: { dbdata: {}, caddydata: {}, caddyconfig: {} }
+networks: { internal: {} }

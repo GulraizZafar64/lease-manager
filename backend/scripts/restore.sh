@@ -3,7 +3,7 @@
 # Usage: scripts/restore.sh /var/backups/lease-manager/leasedb-YYYYMMDD-HHMMSS.dump.enc
 set -euo pipefail
 FILE=$1; BACKUP_PASSFILE=${BACKUP_PASSFILE:-/etc/lease-manager/backup.pass}
-COMPOSE="docker compose -f $(dirname "$0")/../deploy/docker-compose.yml"
+COMPOSE=${COMPOSE:-"docker compose -f $(dirname "$0")/../deploy/docker-compose.yml"}   # the cloud set-up passes its own
 sha256sum -c "$FILE.sha256"
 read -r -p "This replaces all current lease data. Type RESTORE to continue: " ok; [ "$ok" = "RESTORE" ] || exit 1
 $COMPOSE stop app

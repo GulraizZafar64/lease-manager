@@ -25,3 +25,7 @@ VITE_USE_API=true npx vite --port 5198
 ```
 
 Open http://localhost:5198. Without `VITE_USE_API=true` the web app runs on its own and keeps its data in the browser.
+
+## Put it online for free
+
+[`deploy/`](deploy) runs the whole system on one free Oracle Cloud server with HTTPS: follow [deploy/README.md](deploy/README.md).

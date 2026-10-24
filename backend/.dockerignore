@@ -1,0 +1,8 @@
+node_modules
+.pgdata
+.env
+tests
+deploy/secrets
+deploy/certs
+*.tar
+*.dump.enc*

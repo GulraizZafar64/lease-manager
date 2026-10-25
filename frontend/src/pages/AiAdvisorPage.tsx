@@ -13,15 +13,17 @@ import { aiErr, getSample, leaseContext } from '../domain/ai';
 import { openEventWizard, type EventPrefill } from '../components/lease/EventWizard';
 import { nextLeaseId } from '../domain/lease';
 import { toast } from '../utils/uiStore';
-import { deepClone, errMessage } from '../utils/format';
-import { fmtDate } from '../utils/dates';
+import { deepClone, errMessage, uid } from '../utils/format';
+import { fmtDate, fmtDateTime } from '../utils/dates';
+import { History, type ConversationSummary } from '../domain/aiHistory';
 import { esc, md } from '../utils/html';
 import type { EventTypeInfo } from '../types/engine';
 import type { Lease, LeaseEvent, LeaseTerms } from '../types/lease';
 
 /* ======================================================================
    AI advisor (chat with tools that call the engine). The conversation is
-   kept in module state for the current context (lease, contract or portfolio).
+   kept in module state for the current context (lease, contract or portfolio)
+   and saved after each answer, so it can be opened again from History.
    ====================================================================== */
 interface Turn { role: 'user' | 'assistant'; content: string; display?: string }
 interface Stream { html: string | null; trace: string }
@@ -31,10 +33,67 @@ const Advisor = {
     stream: null as Stream | null,
     /** Counts redraws of the log (the original's draw()), which scroll it to the bottom. */
     drawn: 0,
+    /** The saved copy of this conversation, and what it is about (kept when it is opened again elsewhere). */
+    convId: null as string | null, ctx: null as { key: string; label: string } | null,
+    /** Saved conversations, newest first (null until loaded), and whether the list is open. */
+    history: null as ConversationSummary[] | null, showHistory: false,
 };
 const listeners = new Set<() => void>();
 const changed = () => listeners.forEach(f => f());
 const draw = () => { Advisor.drawn++; changed(); };
+
+function loadHistory() {
+    History.list().then(l => { Advisor.history = l; changed(); }).catch(() => { Advisor.history = []; changed(); });
+}
+function newConversation() {
+    Advisor.turns = []; Advisor.stream = null; Advisor.convId = null; Advisor.ctx = null; draw();
+}
+/** Saves the conversation as it now stands (it replaces the saved copy). */
+async function saveConversation() {
+    const ctx = Advisor.ctx, first = Advisor.turns.find(t => t.role === 'user');
+    if (!ctx || !first) return;
+    if (!Advisor.convId) Advisor.convId = uid('c-');
+    const title = (first.display || first.content).replace(/\s+/g, ' ').trim().slice(0, 120) || 'Conversation';
+    try {
+        await History.save({ id: Advisor.convId, title, context: ctx.key, contextLabel: ctx.label, turns: Advisor.turns.map(t => ({ role: t.role, content: t.content, ...(t.display ? { display: t.display } : {}) })) });
+        loadHistory();
+    } catch { toast('This conversation could not be saved.'); }
+}
+/** Opens a saved conversation to read or continue; one about a lease opens on that lease again. */
+async function openConversation(id: string, here: string) {
+    if (Advisor.busy) return;
+    const c = await History.get(id);
+    if (!c) { toast('That conversation is no longer saved.'); loadHistory(); return; }
+    Advisor.turns = c.turns; Advisor.stream = null; Advisor.convId = c.id; Advisor.ctx = { key: c.context, label: c.contextLabel }; Advisor.showHistory = false;
+    const leaseId = c.context.startsWith('lease:') ? c.context.slice(6) : '';
+    if (leaseId && Store.get(leaseId) && here !== c.context) { Advisor.key = c.context; go('ai', { leaseId }); }
+    else Advisor.key = here; // a contract's text is already in the first message, so it continues from here
+    draw();
+}
+async function deleteConversation(id: string) {
+    try { await History.remove(id); } catch { toast('Could not delete the conversation.'); return; }
+    if (Advisor.convId === id) newConversation();
+    loadHistory();
+}
+const contextName = (c: ConversationSummary) => c.context.startsWith('lease:') ? `Lease ${c.contextLabel || c.context.slice(6)}` : c.context.startsWith('doc:') ? `Contract ${c.contextLabel}` : 'Portfolio';
+
+function HistoryList({ items, here, limit }: { items: ConversationSummary[]; here: string; limit?: number }) {
+    return (
+        <ul className="ai-hist-list">
+            {items.slice(0, limit || items.length).map(c => (
+                <li key={c.id} className={c.id === Advisor.convId ? 'on' : ''}>
+                    <button type="button" className="ai-hist-open" data-conv={c.id} onClick={() => void openConversation(c.id, here)} disabled={Advisor.busy}>
+                        <b>{c.title}</b>
+                        <span>{contextName(c)} · {c.turns} message{c.turns === 1 ? '' : 's'}{c.updatedAt ? ' · ' + fmtDateTime(c.updatedAt) : ''}</span>
+                    </button>
+                    <button type="button" className="ai-hist-del" aria-label={`Delete “${c.title}”`} title="Delete" onClick={() => void deleteConversation(c.id)} disabled={Advisor.busy}>
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg>
+                    </button>
+                </li>
+            ))}
+        </ul>
+    );
+}
 
 const ADVISOR_RULES = () => `You are the IFRS 16 advisor inside a lease accounting system used by ${SETTINGS.entity}, reporting in ${SETTINGS.functionalCurrency}, financial year ending month ${SETTINGS.fyEndMonth}. Today is ${AS_OF}.
 How to answer:
@@ -136,7 +195,9 @@ export function AiAdvisorPage({ params: p }: ScreenProps<'ai'>) {
         'Which leases end in the next 12 months and what decisions are needed?',
     ];
     const ctxKey = lease ? 'lease:' + lease.id : p.contract ? 'doc:' + p.contract.name : 'portfolio';
-    if (Advisor.key !== ctxKey) { Advisor.turns = []; Advisor.key = ctxKey; }
+    const ctxLabel = lease ? `${lease.id} ${lease.name}` : p.contract ? p.contract.name : 'Portfolio';
+    if (Advisor.key !== ctxKey) { Advisor.turns = []; Advisor.key = ctxKey; Advisor.convId = null; Advisor.ctx = null; }
+    useEffect(() => { if (!Advisor.history) loadHistory(); }, []);
 
     const send = async () => {
         const inEl = inRef.current;
@@ -144,6 +205,7 @@ export function AiAdvisorPage({ params: p }: ScreenProps<'ai'>) {
         const sample = await getSample();
         if (!sample) { toast('AI is not available in this view.'); return; }
         if (inEl) inEl.value = '';
+        if (!Advisor.turns.length) { Advisor.convId = null; Advisor.ctx = { key: ctxKey, label: ctxLabel }; }
         let content = q;
         if (!Advisor.turns.length && lease) content = `Context: lease ${lease.id}.\n${JSON.stringify(leaseContext(lease, getResult(lease)))}\n\nQuestion: ${q}`;
         if (!Advisor.turns.length && p.contract) content = `Contract "${p.contract.name}":\n"""\n${p.contract.text}\n"""\n\nQuestion: ${q}`;
@@ -163,6 +225,7 @@ export function AiAdvisorPage({ params: p }: ScreenProps<'ai'>) {
             else Advisor.turns.push({ role: 'assistant', content: `_${aiErr(e)}_` });
         } finally {
             Advisor.busy = false; if (Advisor.stream === st) Advisor.stream = null; draw();
+            void saveConversation();
         }
     };
     const sendRef = useRef(send);
@@ -186,12 +249,13 @@ export function AiAdvisorPage({ params: p }: ScreenProps<'ai'>) {
 
     return (
         <div className="card chat">
-            <div className="section-head"><div><h3>{lease ? `Advisor: ${lease.id} ${lease.name}` : p.contract ? `Advisor: ${p.contract.name}` : 'Advisor'}</h3><p className="note">Answers use your live portfolio through the calculation engine. Suggested changes open in the change wizard and go through approval; nothing is posted by the AI. Every AI request is recorded in the audit log.</p></div><button className="btn btn-ghost btn-sm" id="ai-clear" onClick={() => { Advisor.turns = []; Advisor.stream = null; draw(); }}>New conversation</button></div>
+            <div className="section-head"><div><h3>{lease ? `Advisor: ${lease.id} ${lease.name}` : p.contract ? `Advisor: ${p.contract.name}` : 'Advisor'}</h3><p className="note">Answers use your live portfolio through the calculation engine. Suggested changes open in the change wizard and go through approval; nothing is posted by the AI. Every AI request is recorded in the audit log.</p></div><div className="btn-row"><button className="btn btn-ghost btn-sm" id="ai-history" aria-expanded={Advisor.showHistory} aria-controls="ai-hist" onClick={() => { Advisor.showHistory = !Advisor.showHistory; if (Advisor.showHistory) loadHistory(); changed(); }}>History{Advisor.history && Advisor.history.length ? ` (${Advisor.history.length})` : ''}</button><button className="btn btn-ghost btn-sm" id="ai-clear" onClick={newConversation} disabled={Advisor.busy}>New conversation</button></div></div>
+            {Advisor.showHistory && <div className="ai-hist" id="ai-hist"><div className="ai-hist-head"><b>Your conversations</b><span className="note">{History.where()}</span></div>{Advisor.history === null ? <p className="note"><span className="spinner" /> Loading…</p> : Advisor.history.length ? <HistoryList items={Advisor.history} here={ctxKey} /> : <p className="note">No saved conversations yet. They are saved after each answer.</p>}</div>}
             <div className="chat-log" id="ai-log" ref={logRef} onClick={onLogClick}>
                 {Advisor.turns.length ? Advisor.turns.map((t, i) => t.role === 'user'
                     ? <div className="msg user" key={i}>{t.display || t.content}</div>
                     : <div className="msg ai" key={i} dangerouslySetInnerHTML={{ __html: renderAnswer(t.content) }} />)
-                    : <div className="msg ai"><p>Ask about any lease situation. For example:</p><div className="suggest" style={{ marginTop: '8px' }}>{chips.map(c => <button className="chip" data-chip="" key={c} onClick={() => { if (inRef.current) inRef.current.value = c; send(); }}>{c}</button>)}</div></div>}
+                    : <div className="msg ai"><p>Ask about any lease situation. For example:</p><div className="suggest" style={{ marginTop: '8px' }}>{chips.map(c => <button className="chip" data-chip="" key={c} onClick={() => { if (inRef.current) inRef.current.value = c; send(); }}>{c}</button>)}</div>{Advisor.history && Advisor.history.length && !Advisor.showHistory ? <div className="ai-recent"><p>Or continue a recent conversation:</p><HistoryList items={Advisor.history} here={ctxKey} limit={5} /></div> : null}</div>}
                 {stream && <>
                     <div className="msg ai" ref={bubbleRef} dangerouslySetInnerHTML={{ __html: stream.html ?? '<span class="spinner"></span> Thinking…' }} />
                     <div className="tool-trace">{stream.trace}</div>

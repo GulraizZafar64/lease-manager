@@ -6,6 +6,8 @@ import { Ent, FX_MISSING, ROLES, loadAudit, nameOf, realRole, resolveNames, role
 import { clearResults, getResult, isLive } from '../../domain/lease';
 import { runValidation } from '../../domain/validation';
 import { getSample } from '../../domain/ai';
+import { aiStatus } from '../../domain/aiServer';
+import { USE_API } from '../../api/client';
 import { useAppState } from '../../hooks/useAppState';
 import { DataTable, type Column, type DataTableApi } from '../common/DataTable';
 import { exportMenu } from '../common/ExportMenu';
@@ -17,7 +19,7 @@ type MonitorRow = [label: string, value: string, check: Check];
 async function monitorRows(): Promise<MonitorRow[]> {
     const t0 = performance.now(); clearResults(); let fails = 0; for (const l of Store.all) { if (!getResult(l) && l.terms.commencement) fails++; } const ms = performance.now() - t0;
     const v = runValidation(), vp = v.filter(x => x.pass).length;
-    const ai = await getSample(), dl = window.claude && window.claude.use ? await window.claude.use('downloads').catch(() => null) : null;
+    const ai = await getSample(), aiSrv = USE_API ? await aiStatus().catch(() => null) : null, dl = window.claude && window.claude.use ? await window.claude.use('downloads').catch(() => null) : null;
     const auditN = (await loadAudit(5000)).length;
     const charts = typeof Chart !== 'undefined';
     return [
@@ -30,7 +32,7 @@ async function monitorRows(): Promise<MonitorRow[]> {
         ['Users / audit entries', `${Ent.users.items.length} users, ${auditN} audit entries`, 'ok'],
         ['Bank statements / batches / ERP files', `${Ent.bank.items.length} / ${Ent.batches.items.length} / ${Ent.exports.items.length}`, 'ok'],
         ['Exchange rates', FX_MISSING.size ? `Missing: ${[...FX_MISSING].join(', ')}` : 'All currencies in use have rates', FX_MISSING.size ? 'bad' : 'ok'],
-        ['AI (Claude)', ai ? 'Available; each use asks your permission the first time' : 'Not available in this view', ai ? 'ok' : 'warn'],
+        ['AI (Claude)', aiSrv ? (aiSrv.available ? `On the company server; US$${aiSrv.usedUsd.toFixed(2)} of US$${aiSrv.limitUsd.toFixed(2)} used this month${aiSrv.paused ? '; paused: the server’s allowance for the month is used up' : ''}` : 'Not set up on the server (ANTHROPIC_API_KEY)') : ai ? 'Available; each use asks your permission the first time' : 'Not available in this view', ai && !(aiSrv && aiSrv.paused) ? 'ok' : 'warn'],
         ['File downloads', dl ? 'Available' : 'Browser fallback', dl ? 'ok' : 'warn'],
         ['Charts library', charts ? 'Loaded' : 'Not loaded', charts ? 'ok' : 'warn'],
         ['Last backup', SETTINGS.lastBackup ? fmtDateTime(SETTINGS.lastBackup) : 'Never', SETTINGS.lastBackup && (Date.now() - new Date(SETTINGS.lastBackup).getTime()) / 864e5 < 35 ? 'ok' : 'warn'],

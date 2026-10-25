@@ -74,6 +74,24 @@ company users sign in at `https://<your address>`.
 | Restore a backup | `sudo COMPOSE="docker compose -f $PWD/deploy/docker-compose.yml" bash backend/scripts/restore.sh <file>` |
 | Unlock a user, reset two-step sign-in | `sudo docker compose -f deploy/docker-compose.yml exec app node src/cli.js unlock <email>` (or `reset-mfa <email>`) |
 
+## AI features (optional)
+The advisor, contract reading, change suggestions and report narratives use Claude through your own Anthropic API
+key, held on the server only. Create a key at console.anthropic.com, then add it to `deploy/.env` and run
+`bash deploy/install.sh`:
+```
+ANTHROPIC_API_KEY=sk-ant-...
+AI_MONTHLY_LIMIT_USD=5
+AI_TOTAL_MONTHLY_LIMIT_USD=5
+```
+- Monthly allowances in US$ (both 5 unless set): `AI_MONTHLY_LIMIT_USD` for each company, and
+  `AI_TOTAL_MONTHLY_LIMIT_USD` for all companies together. When either is used up, AI stops until the 1st.
+  For production, raise them here and run `bash deploy/install.sh`. **Administration → System monitor** shows the
+  company's spending for the month.
+- Routine work (contract reading, change suggestions, summaries) uses Claude Haiku 5.5; the advisor and report
+  narratives use Claude Sonnet 5.5. Change them with `AI_MODEL_DEFAULT` and `AI_MODEL_COMPLEX`.
+- Also set a monthly spend limit in the Anthropic Console, so the bill has a ceiling whatever happens.
+- Lease details in a request (terms, counterparties, amounts) are sent to Anthropic's API to answer it.
+
 ## Keep in mind
 - **Secrets:** copy `deploy/.env` (it holds `MASTER_KEY` and the database password) and `/etc/lease-manager/backup.pass`
   into your password vault. Without `MASTER_KEY` nobody's authenticator codes can be checked.

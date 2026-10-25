@@ -12,6 +12,7 @@ import { roleRoutes } from './roles.js';
 import { companySettingsRoutes } from './companySettings.js';
 import { bankingRoutes } from './banking.js';
 import { recordRoutes } from './records.js';
+import { aiRoutes } from './ai.js';
 import { HttpError } from './rbac.js';
 import VALIDATION from './engine/validation.js';
 
@@ -52,6 +53,7 @@ export async function buildApp(cfg, { logger = true } = {}) {
     companySettingsRoutes(app, cfg);
     bankingRoutes(app, cfg);
     recordRoutes(app, cfg);
+    aiRoutes(app, cfg);
     platformRoutes(app, cfg);
 
     // Expired sessions are swept every 15 minutes

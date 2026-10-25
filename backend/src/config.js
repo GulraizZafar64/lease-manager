@@ -24,6 +24,12 @@ export function loadConfig(overrides = {}) {
         passwordMinLength: Number(env.PASSWORD_MIN_LENGTH || 12),
         orgName: env.ORG_NAME || 'Lease Manager',
         logLevel: env.LOG_LEVEL || 'info',
+        // AI: off unless a key is set. Monthly allowances in US$: for each company, and for the whole server.
+        anthropicKey: env.ANTHROPIC_API_KEY || '',
+        aiMonthlyLimitUsd: Number(env.AI_MONTHLY_LIMIT_USD || 5),
+        aiTotalLimitUsd: Number(env.AI_TOTAL_MONTHLY_LIMIT_USD || 5),
+        aiModelDefault: env.AI_MODEL_DEFAULT || 'claude-haiku-5-5',
+        aiModelComplex: env.AI_MODEL_COMPLEX || 'claude-sonnet-5-5',
         ...overrides
     };
     if (!cfg.databaseUrl) required('DATABASE_URL');

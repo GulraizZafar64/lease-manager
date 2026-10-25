@@ -24,6 +24,12 @@ services:
       MASTER_KEY: ${MASTER_KEY:?Set MASTER_KEY in deploy/.env}
       ORG_NAME: ${ORG_NAME:-Lease Manager}
       REQUIRE_MFA: ${REQUIRE_MFA:-true}
+      # AI (optional): off without a key; monthly allowances in US$, per company and for all companies together
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AI_MONTHLY_LIMIT_USD: ${AI_MONTHLY_LIMIT_USD:-5}
+      AI_TOTAL_MONTHLY_LIMIT_USD: ${AI_TOTAL_MONTHLY_LIMIT_USD:-5}
+      AI_MODEL_DEFAULT: ${AI_MODEL_DEFAULT:-claude-haiku-5-5}
+      AI_MODEL_COMPLEX: ${AI_MODEL_COMPLEX:-claude-sonnet-5-5}
       COOKIE_SECURE: "true"
       TRUST_PROXY: "true"
     depends_on: { db: { condition: service_healthy } }

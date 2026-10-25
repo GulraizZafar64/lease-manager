@@ -15,7 +15,7 @@ import { go, refresh } from '../domain/nav';
 import { AS_OF, SCOPE } from '../domain/state';
 import { useAppState } from '../hooks/useAppState';
 import { BAR, ChartCanvas, baseOptions, lineSeries, pointer, vizTheme } from '../components/common/ChartCanvas';
-import { Delta, Sparkline } from '../components/common/Viz';
+import { BarList, Delta, Donut, MiniColumns, Sparkline, StackBar } from '../components/common/Viz';
 import { openPaymentModal } from '../components/lease/PaymentModal';
 import { openEventWizard } from '../components/lease/EventWizard';
 import { Modal, toast } from '../utils/uiStore';
@@ -216,15 +216,15 @@ function Pending0() {
 const plural = (n: number, one: string, many: string) => n + (n === 1 ? one : many);
 
 /* ---- Building blocks ---- */
-function Kpi({ k, icon, label, value, sub, tone, delta, spark, onOpen, children }: { k: string; icon: string; label: string; value: string; sub: ReactNode; tone?: 'warn'; delta?: ReactNode; spark?: ReactNode; onOpen: (k: string) => void; children?: ReactNode }) {
+/** A headline figure: label and icon, the value, its recent history, then the change and a note. `hue` is the series
+    colour the same measure has in the charts (the three balances), so the card and its line read as one. */
+function Kpi({ k, icon, label, value, sub, tone, hue, delta, spark, onOpen, children }: { k: string; icon: string; label: string; value: string; sub: ReactNode; tone?: 'warn'; hue?: 1 | 2 | 3; delta?: ReactNode; spark?: ReactNode; onOpen: (k: string) => void; children?: ReactNode }) {
     return (
-        <button className={`kpi${tone ? ' kpi-' + tone : ''}`} data-go={k} onClick={() => onOpen(k)}>
-            <span className="kpi-head"><span className="kpi-ic"><Ic d={icon} size={15} /></span><span className="kpi-l">{label}</span></span>
+        <button className={`kpi${tone ? ' kpi-' + tone : ''}${hue ? ' kpi-hue-' + hue : ''}`} data-go={k} onClick={() => onOpen(k)}>
+            <span className="kpi-head"><span className="kpi-l">{label}</span><span className="kpi-ic"><Ic d={icon} size={20} /></span></span>
             <span className="kpi-v">{value}</span>
-            {delta ? <span className="kpi-d">{delta}</span> : null}
-            {spark}
-            {children}
-            <span className="kpi-s">{sub}</span>
+            <span className="kpi-body">{spark}{children}</span>
+            <span className="kpi-foot">{delta ? <span className="kpi-d">{delta}</span> : null}<span className="kpi-s">{sub}</span></span>
         </button>
     );
 }
@@ -258,7 +258,16 @@ function Dashboard({ notice }: { notice: ReactNode }) {
     const fy = fyBounds(AS_OF);
     const split = currentSplit(AS_OF);
     let rou = 0, ni = 0;
-    for (const l of leasesFor({})) { const r = getResult(l); if (!r) continue; const b = balanceAt(r, AS_OF); if (r.mode === 'lessee') rou += conv(l, b.A); if (r.mode === 'lessor-finance') ni += conv(l, b.L); }
+    const rouByClass: Record<string, number> = {};
+    for (const l of leasesFor({})) {
+        const r = getResult(l); if (!r) continue; const b = balanceAt(r, AS_OF);
+        if (r.mode === 'lessee') { rou += conv(l, b.A); rouByClass[l.assetClass] = (rouByClass[l.assetClass] || 0) + conv(l, b.A); }
+        if (r.mode === 'lessor-finance') ni += conv(l, b.L);
+    }
+    // The three largest classes, the rest together
+    const rouRanked = Object.entries(rouByClass).filter(([, v]) => v > 0.5).sort((a, b) => b[1] - a[1]);
+    const rouRows = rouRanked.slice(0, rouRanked.length > 4 ? 3 : 4).map(([k, v]) => ({ label: ASSET_CLASSES[k] || k, value: v }))
+        .concat(rouRanked.length > 4 ? [{ label: 'Other', value: sum(rouRanked.slice(3), x => x[1]) }] : []);
     const plYTD = leaseCost(fy.start, AS_OF);
     const mat = maturityTable('lessee', AS_OF, BANDS_STANDARD);
     const pend = pendingApprovals();
@@ -274,7 +283,10 @@ function Dashboard({ notice }: { notice: ReactNode }) {
     const cost = useMemo(() => {
         const months: number[] = [];
         for (let s = fy.start; s <= AS_OF; s = addMonths(s, 1)) { const e = addDays(addMonths(s, 1), -1); months.push(leaseCost(s, e < AS_OF ? e : AS_OF)); }
-        return { months, lastYear: leaseCost(addMonths(fy.start, -12), addMonths(AS_OF, -12)) };
+        // This year's cost by kind, as leaseCost totals it
+        const pl = lesseeMovement(fy.start, AS_OF).pl;
+        const parts = { dep: sum(Object.values(pl.depByClass), x => x), interest: pl.interest, other: pl.st + pl.lv + pl.variable + pl.impairment - pl.gain };
+        return { months, parts, lastYear: leaseCost(addMonths(fy.start, -12), addMonths(AS_OF, -12)) };
     }, [version]); // eslint-disable-line react-hooks/exhaustive-deps
     const h0 = hist[0], since = fmtDate(h0.date);
     const sparkLabel = (what: string, xs: number[], when: string) => `${what} ${when}: from ${fmtNum(xs[0])} to ${fmtNum(xs[xs.length - 1])}`;
@@ -330,21 +342,20 @@ function Dashboard({ notice }: { notice: ReactNode }) {
             {notice}
 
             <div className="dash-kpis" data-widget="position" hidden={!!hid.position}>
-                <Kpi k="liability" icon={I.scale} label="Lease liabilities" value={fmtNum(split.total)} onOpen={goPos}
-                    delta={<Delta now={split.total} then={h0.L} vs={since} />} spark={<Sparkline values={hist.map(p => p.L)} label={sparkLabel('Lease liabilities', hist.map(p => p.L), 'at month-ends since ' + since)} />}
-                    sub={<><i className="dot dot-1" />Current {fmtNum(split.current)}<i className="dot dot-2" />Non-current {fmtNum(split.nonCurrent)}</>}>
-                    <span className="kpi-meter" role="img" aria-label={`Current ${Math.round(currentShare * 100)}%, non-current ${Math.round((1 - currentShare) * 100)}%`}>
-                        <span style={{ width: `${currentShare * 100}%` }} /><span style={{ width: `${(1 - currentShare) * 100}%` }} />
-                    </span>
-                </Kpi>
-                <Kpi k="rou" icon={I.building} label="Right-of-use assets" value={fmtNum(rou)} sub="Net of depreciation" onOpen={goPos}
-                    delta={<Delta now={rou} then={h0.A} vs={since} />} spark={<Sparkline values={hist.map(p => p.A)} label={sparkLabel('Right-of-use assets', hist.map(p => p.A), 'at month-ends since ' + since)} />} />
-                <Kpi k="ni" icon={I.trend} label="Net investment in leases" value={fmtNum(ni)} sub="Lessor finance leases" onOpen={goPos}
+                <Kpi k="liability" hue={1} icon={I.scale} label="Lease liabilities" value={fmtNum(split.total)} onOpen={goPos}
+                    delta={<Delta now={split.total} then={h0.L} vs={since} />} sub="Current is due within 12 months"
+                    spark={<Donut label={`Lease liabilities: current ${fmtNum(split.current)} (${Math.round(currentShare * 100)}%), non-current ${fmtNum(split.nonCurrent)}`}
+                        parts={[{ label: 'Current', value: split.current, color: 'var(--viz-1)' }, { label: 'Non-current', value: split.nonCurrent, color: 'color-mix(in srgb, var(--viz-1) 35%, var(--surface-3))' }]} />} />
+                <Kpi k="rou" hue={2} icon={I.building} label="Right-of-use assets" value={fmtNum(rou)} sub="Net of depreciation, by asset class" onOpen={goPos}
+                    delta={<Delta now={rou} then={h0.A} vs={since} />} spark={<BarList rows={rouRows} label={`Right-of-use assets by asset class: ${rouRows.map(r => `${r.label} ${fmtNum(r.value)}`).join(', ')}`} />} />
+                <Kpi k="ni" hue={3} icon={I.trend} label="Net investment in leases" value={fmtNum(ni)} sub="Lessor finance leases" onOpen={goPos}
                     delta={<Delta now={ni} then={h0.NI} vs={since} />} spark={<Sparkline values={hist.map(p => p.NI)} label={sparkLabel('Net investment', hist.map(p => p.NI), 'at month-ends since ' + since)} />} />
                 <Kpi k="maturity" icon={I.calendar} label="Payments, next 12 months" value={fmtNum(mat.rows[0].amount)} sub="Undiscounted, recognised leases" onOpen={goPos}
-                    delta={<Delta now={sum(pays.next, x => x.amount)} then={sum(pays.prev, x => x.amount)} vs="past year" title="in the 12 months before today" />} spark={<Sparkline values={pays.next.map(x => x.amount)} label={sparkLabel('Payments due', pays.next.map(x => x.amount), 'by month over the next 12 months')} />} />
-                <Kpi k="pl" icon={I.pie} label={`Lease cost, ${fy.label} to date`} value={fmtNum(plYTD)} sub="Depreciation, interest, exempt and variable" onOpen={goPos}
-                    delta={<Delta now={plYTD} then={cost.lastYear} vs="last year" title="in the same period last year" />} spark={<Sparkline values={cost.months} label={sparkLabel('Lease cost', cost.months, 'by month this financial year')} />} />
+                    delta={<Delta now={sum(pays.next, x => x.amount)} then={sum(pays.prev, x => x.amount)} vs="past year" title="in the 12 months before today" />} spark={<MiniColumns values={pays.next.map(x => x.amount)} labels={pays.next.map(x => monthLabel(x.to))} label={sparkLabel('Payments due', pays.next.map(x => x.amount), 'by month over the next 12 months')} />} />
+                <Kpi k="pl" icon={I.pie} label={`Lease cost, ${fy.label} to date`} value={fmtNum(plYTD)} sub="Other: short-term, low-value and variable expense, impairment, less gains" onOpen={goPos}
+                    delta={<Delta now={plYTD} then={cost.lastYear} vs="last year" title="in the same period last year" />}
+                    spark={<StackBar label={`Lease cost this year: depreciation ${fmtNum(cost.parts.dep)}, interest ${fmtNum(cost.parts.interest)}, other ${fmtNum(cost.parts.other)}`}
+                        parts={[{ label: 'Depreciation', value: cost.parts.dep, color: 'var(--viz-1)' }, { label: 'Interest', value: cost.parts.interest, color: 'var(--viz-2)' }, { label: 'Other', value: cost.parts.other, color: 'var(--viz-3)' }]} />} />
                 <Kpi k="approvals" icon={I.check} label="Awaiting approval" value={String(pend.length)} tone={pend.length ? 'warn' : undefined} onOpen={goPos}
                     sub={`${plural(pend.filter(p => p.kind === 'event').length, ' change', ' changes')}, ${plural(pend.filter(p => p.kind === 'lease').length, ' new lease', ' new leases')}`} />
             </div>

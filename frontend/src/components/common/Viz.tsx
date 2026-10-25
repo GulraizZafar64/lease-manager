@@ -21,6 +21,86 @@ export function Sparkline({ values, label }: { values: number[]; label: string }
     );
 }
 
+export interface Part { label: string; value: number; color: string }
+const pct = (v: number, total: number) => total ? Math.round(v / total * 100) : 0;
+
+/** Parts of one figure, each named with its amount beside the mark. */
+function PartsKey({ parts }: { parts: Part[] }) {
+    return <span className="mc-key">{parts.map(p => <span key={p.label} title={`${p.label}: ${fmtNum(p.value)}`}><i style={{ background: p.color }} /><span className="mc-key-l">{p.label}</span><b>{fmtNum(p.value)}</b></span>)}</span>;
+}
+
+/** Part-to-whole of one figure in two or three parts: a ring (the first part's share in the middle) and a key. */
+export function Donut({ parts, label }: { parts: Part[]; label: string }) {
+    const shown = parts.filter(p => p.value > 0), total = shown.reduce((s, p) => s + p.value, 0);
+    if (!total) return null;
+    const gap = shown.length > 1 ? 1.5 : 0; // a surface gap between segments, in hundredths of the ring
+    let at = 25; // start at twelve o'clock
+    return (
+        <span className="mc mc-donut">
+            <svg viewBox="0 0 42 42" role="img" aria-label={label}>
+                <circle cx="21" cy="21" r="15.915" className="mc-track" />
+                {shown.map(p => {
+                    const len = p.value / total * 100, el = (
+                        <circle key={p.label} cx="21" cy="21" r="15.915" style={{ stroke: p.color }} strokeDasharray={`${Math.max(len - gap, 0.5)} ${100 - Math.max(len - gap, 0.5)}`} strokeDashoffset={at}>
+                            <title>{`${p.label}: ${fmtNum(p.value)} (${pct(p.value, total)}%)`}</title>
+                        </circle>);
+                    at -= len; return el;
+                })}
+                <text x="21" y="21" className="mc-donut-c">{pct(shown[0].value, total)}%</text>
+            </svg>
+            <PartsKey parts={parts} />
+        </span>
+    );
+}
+
+/** One bar split into its parts (shares of the whole), with a key giving each amount. */
+export function StackBar({ parts, label }: { parts: Part[]; label: string }) {
+    const shown = parts.filter(p => p.value > 0), total = shown.reduce((s, p) => s + p.value, 0);
+    if (!total) return null;
+    return (
+        <span className="mc mc-stack">
+            <span className="mc-stack-bar" role="img" aria-label={label}>
+                {shown.map(p => <span key={p.label} style={{ flexGrow: p.value / total, background: p.color }} title={`${p.label}: ${fmtNum(p.value)} (${pct(p.value, total)}%)`} />)}
+            </span>
+            <PartsKey parts={parts} />
+        </span>
+    );
+}
+
+/** A column per period (one series), each giving its amount on hover. */
+export function MiniColumns({ values, labels, label }: { values: number[]; labels: string[]; label: string }) {
+    const max = Math.max(...values, 0);
+    if (!max) return null;
+    const W = 120, H = 36, gap = 2, w = (W - gap * (values.length - 1)) / values.length;
+    return (
+        <span className="mc mc-cols">
+            <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={label}>
+                {values.map((v, i) => {
+                    const h = v > 0 ? Math.max(v / max * H, 1.5) : 1, x = i * (w + gap);
+                    return <rect key={i} x={x} y={H - h} width={w} height={h} rx={Math.min(1.5, w / 2)} className={v > 0 ? 'mc-col' : 'mc-col mc-col-0'}><title>{`${labels[i]}: ${fmtNum(v)}`}</title></rect>;
+                })}
+            </svg>
+            <span className="mc-cols-axis" aria-hidden="true"><span>{labels[0]}</span><span>{labels[labels.length - 1]}</span></span>
+        </span>
+    );
+}
+
+/** The largest few items as ranked bars of one colour, each named with its amount. */
+export function BarList({ rows, label }: { rows: { label: string; value: number }[]; label: string }) {
+    const max = Math.max(...rows.map(r => r.value), 0);
+    if (!max) return null;
+    return (
+        <span className="mc mc-bars" role="img" aria-label={label}>
+            {rows.map(r => (
+                <span key={r.label} className="mc-bar" title={`${r.label}: ${fmtNum(r.value)}`}>
+                    <span className="mc-bar-l">{r.label}</span><b>{fmtNum(r.value)}</b>
+                    <span className="mc-bar-t"><span style={{ width: `${r.value / max * 100}%` }} /></span>
+                </span>
+            ))}
+        </span>
+    );
+}
+
 const ARROW = { up: 'M12 19V5M5 12l7-7 7 7', down: 'M12 5v14M19 12l-7 7-7-7', flat: 'M5 12h14' };
 
 /** Change against a named earlier point. Neutral ink: for balances, up is neither good nor bad. */
@@ -31,8 +111,8 @@ export function Delta({ now, then, vs, title }: { now: number; then: number; vs:
     const text = ch === null ? 'New' : `${ch > 0 ? '+' : ''}${(ch * 100).toFixed(Math.abs(ch) < 0.1 ? 1 : 0)}%`;
     return (
         <span className="delta" title={`${fmtNum(then)} ${title || 'at ' + vs}`}>
-            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={ARROW[dir]} /></svg>
-            <b>{text}</b><span>{ch === null ? 'since' : 'vs'} {vs}</span>
+            <span className="delta-pill"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={ARROW[dir]} /></svg>
+            <b>{text}</b></span><span>{ch === null ? 'since' : 'vs'} {vs}</span>
         </span>
     );
 }

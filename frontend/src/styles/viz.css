@@ -144,3 +144,50 @@
     .rp-body { padding: 18px 14px 20px; }
 }
 @media print { .rp-tabs, .rp-toolbar { display: none; } .rp-statements { max-width: none; } }
+
+/* ---------- Small charts inside headline figures: a ring, a split bar, columns, ranked bars ----------
+   Values and names wear the text inks; the marks carry the colour. Each mark names its amount on hover. */
+.mc { display: flex; min-width: 0; width: 100%; }
+.mc-key { display: grid; gap: 4px; min-width: 0; flex: 1; align-content: center; font-size: 12.5px; color: var(--muted); }
+.mc-key > span { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 6px; }
+.mc-key i { width: 8px; height: 8px; border-radius: 2px; }
+.mc-key-l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mc-key b { color: var(--strong); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.mc-donut { align-items: center; gap: 14px; }
+.mc-donut svg { flex-shrink: 0; width: 64px; height: 64px; overflow: visible; }
+.mc-donut circle { fill: none; stroke-width: 6; }
+.mc-donut .mc-track { stroke: var(--surface-3); }
+.mc-donut-c { font-size: 8.5px; font-weight: 700; fill: var(--strong); text-anchor: middle; dominant-baseline: central; }
+
+.mc-stack { flex-direction: column; gap: 10px; }
+.mc-stack-bar { display: flex; gap: 2px; height: 10px; border-radius: 5px; overflow: hidden; background: var(--surface-3); }
+.mc-stack-bar > span { min-width: 3px; }
+.mc-stack .mc-key { grid-template-columns: repeat(3, minmax(0, auto)); justify-content: start; column-gap: 14px; }
+.mc-stack .mc-key > span { grid-template-columns: auto auto; grid-template-rows: auto auto; row-gap: 0; column-gap: 6px; }
+.mc-stack .mc-key b { grid-column: 2; }
+
+.mc-cols { flex-direction: column; gap: 4px; }
+.mc-cols svg { display: block; width: 100%; height: 44px; }
+.mc-col { fill: var(--kpi-hue, var(--viz-1)); opacity: .85; transition: opacity .15s ease; }
+.mc-col:hover { opacity: 1; }
+.mc-col-0 { fill: var(--line-2); }
+.mc-cols-axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+
+.mc-bars { flex-direction: column; gap: 7px; }
+.mc-bar { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 8px; row-gap: 3px; font-size: 12.5px; color: var(--muted); }
+.mc-bar-l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mc-bar b { color: var(--strong); font-weight: 600; font-variant-numeric: tabular-nums; }
+.mc-bar-t { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
+.mc-bar-t > span { display: block; height: 100%; border-radius: 3px; background: var(--kpi-hue, var(--viz-1)); }
+@media (prefers-reduced-motion: reduce) { .mc-col { transition: none; } }
+.kpi-body:has(> .mc-donut) { justify-content: center; } /* a ring sits mid-card rather than at the foot */
+/* Narrow cards (two to a row on a phone): the ring's key goes under it, the split bar's key one item to a row */
+@container (max-width: 260px) {
+    .mc-donut { flex-wrap: wrap; gap: 10px; }
+    .mc-donut .mc-key { flex-basis: 100%; }
+    .mc-stack .mc-key { grid-template-columns: minmax(0, 1fr); }
+    .mc-stack .mc-key > span { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-rows: auto; }
+    .mc-stack .mc-key b { grid-column: auto; }
+    .mc-bar { font-size: 12px; }
+}

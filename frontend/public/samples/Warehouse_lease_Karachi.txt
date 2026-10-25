@@ -1,0 +1,31 @@
+SAMPLE CONTRACT (fictional, for trying the import)
+
+LEASE AGREEMENT No. SLA/2026/014
+
+This Lease Agreement is made at Karachi on 15 June 2026 between
+Sample Logistics Parks (Private) Limited, hereinafter called the "Lessor"
+AND
+Demo Distribution (Private) Limited, hereinafter called the "Lessee".
+
+1. PREMISES
+The Lessor leases to the Lessee Warehouse No. 4, Plot E-12, Port Qasim Industrial Area, Karachi, having a covered area of 40,000 sq ft (the "Premises"), for use as a storage and distribution warehouse.
+
+2. TERM
+The lease shall be for a period of 60 months commencing on 1 July 2026 and expiring on 30 June 2031.
+
+3. RENT
+The Lessee shall pay a monthly rent of Rs. 2,400,000 (Rupees two million four hundred thousand only), payable monthly in advance on or before the 5th day of each month.
+
+4. ESCALATION
+The rent shall increase by 10% every 12 months on each anniversary of the commencement date.
+
+5. SECURITY DEPOSIT
+The Lessee shall pay a refundable security deposit equal to three months' rent, i.e. Rs. 7,200,000, refundable without interest at the end of the lease.
+
+6. RENEWAL
+The Lessee shall have the option to renew this lease for a further period of 36 months on terms to be mutually agreed, by giving 90 days' written notice before expiry.
+
+7. MAINTENANCE AND UTILITIES
+Utilities, property tax and routine maintenance are payable by the Lessee in addition to the rent.
+
+IN WITNESS WHEREOF the parties have signed this Agreement on the date first written above.

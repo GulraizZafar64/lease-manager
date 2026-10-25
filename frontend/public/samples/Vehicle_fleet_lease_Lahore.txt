@@ -1,0 +1,20 @@
+SAMPLE CONTRACT (fictional, for trying the import)
+
+VEHICLE LEASE AGREEMENT No. DEMO-VL-0388
+
+Lessor: Sample Leasing Modaraba, Lahore
+Lessee: Demo Foods (Private) Limited
+
+Leased assets: 20 light commercial delivery vehicles (Suzuki Ravi), as listed in Schedule A.
+
+Term: The lease is for a period of 36 months commencing on 1 August 2026 and expiring on 31 July 2029.
+
+Rent: Rs. 3,150,000 per quarter, payable in arrears at the end of each quarter (12 rentals in total).
+
+Rate of return: The rentals have been calculated at a markup rate of 17.5% per annum.
+
+Security deposit: Rs. 2,500,000, adjustable against the purchase price.
+
+Purchase option: At the end of the lease term the Lessee may purchase all vehicles for a price of Rs. 2,500,000.
+
+Insurance and registration are arranged by the Lessor and included in the rentals.

@@ -1,0 +1,18 @@
+SAMPLE CONTRACT (fictional, for trying the import)
+
+TENANCY AGREEMENT
+
+Landlord: Sample Properties Islamabad
+Tenant: Demo Retail (Private) Limited
+
+The Landlord lets to the Tenant Shop No. 7, Ground Floor, Sample Centre, Blue Area, Islamabad, measuring 1,200 sq ft.
+
+The tenancy is for a period of 3 years.
+
+Rent: Rs. 450,000 per month.
+
+The first 2 months shall be rent-free.
+
+The rent shall increase by 7.5% annually.
+
+Either party may terminate this tenancy by giving 60 days' notice after a lock-in period of 12 months.

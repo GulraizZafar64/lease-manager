@@ -1,0 +1,24 @@
+SAMPLE CONTRACT (fictional, for trying the import)
+
+From: Leasing desk, Sample Machinery Leasing Limited
+To: Finance team, Demo Textiles (Private) Limited
+Subject: Agreed lease terms, weaving machines, agreement SML/FSD/2207
+
+Dear Finance Team,
+
+As agreed in our meeting, these are the terms for the lease of 6 air-jet weaving machines installed at your Faisalabad mill. The signed agreement follows by courier.
+
+Lessor: Sample Machinery Leasing Limited
+Lessee: Demo Textiles (Private) Limited
+Term: a lease term of 60 months starting on 1 November 2026
+Rent: Rs. 1,240,000 per month, payable in arrears at the end of each month
+Rate: 6-month KIBOR + 2.5% per annum, reset every six months
+Security deposit: Rs. 2,480,000, refundable at the end of the lease
+Purchase option: at the end of the term the Lessee may buy the machines for Rs. 500,000
+Useful life of the machines: 15 years
+
+Insurance is arranged by the Lessee. Please confirm these terms by reply.
+
+Regards,
+Leasing desk
+Sample Machinery Leasing Limited
